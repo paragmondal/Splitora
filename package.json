@@ -4,7 +4,13 @@
   "description": "Splitora is a full-stack group expense splitting platform.",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "npm --prefix server run dev",
+    "start": "npm --prefix server run start",
+    "client:dev": "npm --prefix client run dev",
+    "client:build": "npm --prefix client run build",
+    "server:dev": "npm --prefix server run dev",
+    "server:start": "npm --prefix server run start"
   },
   "repository": {
     "type": "git",

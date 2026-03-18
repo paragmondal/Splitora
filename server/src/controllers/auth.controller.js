@@ -1,0 +1,241 @@
+const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
+const prisma = require("../config/db");
+const ApiResponse = require("../utils/apiResponse");
+
+const ACCESS_TOKEN_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "15m";
+const REFRESH_TOKEN_EXPIRES_IN = process.env.JWT_REFRESH_EXPIRES_IN || "7d";
+const REFRESH_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+const createAccessToken = (userId) =>
+  jwt.sign({ userId }, process.env.JWT_SECRET, {
+    expiresIn: ACCESS_TOKEN_EXPIRES_IN,
+  });
+
+const createRefreshToken = (userId) =>
+  jwt.sign({ userId }, process.env.JWT_REFRESH_SECRET, {
+    expiresIn: REFRESH_TOKEN_EXPIRES_IN,
+  });
+
+const sanitizeUser = (user) => ({
+  id: user.id,
+  name: user.name,
+  email: user.email,
+  avatar: user.avatar,
+  createdAt: user.createdAt,
+  updatedAt: user.updatedAt,
+});
+
+const isValidEmail = (email) => /^\S+@\S+\.\S+$/.test(email);
+
+const register = async (req, res, next) => {
+  try {
+    const { name, email, password } = req.body;
+    const normalizedName = String(name || "").trim();
+    const normalizedEmail = String(email || "")
+      .trim()
+      .toLowerCase();
+
+    if (!normalizedName || !normalizedEmail || !password) {
+      return ApiResponse.error(res, "Name, email, and password are required", 400);
+    }
+
+    if (String(password).length < 6) {
+      return ApiResponse.error(res, "Password must be at least 6 characters", 400);
+    }
+
+    if (!isValidEmail(normalizedEmail)) {
+      return ApiResponse.error(res, "Please provide a valid email address", 400);
+    }
+
+    const existingUser = await prisma.user.findUnique({
+      where: { email: normalizedEmail },
+      select: { id: true },
+    });
+
+    if (existingUser) {
+      return ApiResponse.error(res, "Email is already registered", 400);
+    }
+
+    const passwordHash = await bcrypt.hash(password, 12);
+
+    const user = await prisma.user.create({
+      data: {
+        name: normalizedName,
+        email: normalizedEmail,
+        passwordHash,
+      },
+    });
+
+    const accessToken = createAccessToken(user.id);
+    const refreshToken = createRefreshToken(user.id);
+
+    await prisma.refreshToken.create({
+      data: {
+        token: refreshToken,
+        userId: user.id,
+        expiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL_MS),
+      },
+    });
+
+    return ApiResponse.success(
+      res,
+      {
+        user: sanitizeUser(user),
+        accessToken,
+        refreshToken,
+      },
+      "User registered successfully",
+      201
+    );
+  } catch (error) {
+    if (error?.code === "P2002") {
+      return ApiResponse.error(res, "Email is already registered", 400);
+    }
+    return next(error);
+  }
+};
+
+const login = async (req, res, next) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return ApiResponse.error(res, "Email and password are required", 400);
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email },
+    });
+
+    if (!user) {
+      return ApiResponse.error(res, "Invalid email or password", 401);
+    }
+
+    const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
+
+    if (!isPasswordValid) {
+      return ApiResponse.error(res, "Invalid email or password", 401);
+    }
+
+    const accessToken = createAccessToken(user.id);
+    const refreshToken = createRefreshToken(user.id);
+
+    await prisma.refreshToken.create({
+      data: {
+        token: refreshToken,
+        userId: user.id,
+        expiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL_MS),
+      },
+    });
+
+    return ApiResponse.success(
+      res,
+      {
+        user: sanitizeUser(user),
+        accessToken,
+        refreshToken,
+      },
+      "Login successful"
+    );
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const refreshToken = async (req, res, next) => {
+  try {
+    const { refreshToken: token } = req.body;
+
+    if (!token) {
+      return ApiResponse.error(res, "Refresh token is required", 401);
+    }
+
+    const storedToken = await prisma.refreshToken.findUnique({
+      where: { token },
+    });
+
+    if (!storedToken || storedToken.expiresAt < new Date()) {
+      return ApiResponse.error(res, "Invalid or expired refresh token", 401);
+    }
+
+    try {
+      jwt.verify(token, process.env.JWT_REFRESH_SECRET);
+    } catch (_error) {
+      return ApiResponse.error(res, "Invalid or expired refresh token", 401);
+    }
+
+    const newAccessToken = createAccessToken(storedToken.userId);
+
+    return ApiResponse.success(
+      res,
+      { accessToken: newAccessToken },
+      "Access token refreshed"
+    );
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const logout = async (req, res, next) => {
+  try {
+    const { refreshToken: token } = req.body;
+
+    if (!token) {
+      return ApiResponse.error(res, "Refresh token is required", 400);
+    }
+
+    await prisma.refreshToken.deleteMany({
+      where: { token },
+    });
+
+    return ApiResponse.success(res, null, "Logged out successfully");
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const getMe = async (req, res, next) => {
+  try {
+    const userId = req.user && req.user.userId;
+
+    if (!userId) {
+      return ApiResponse.error(res, "Unauthorized", 401);
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        avatar: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    if (!user) {
+      return ApiResponse.error(res, "User not found", 404);
+    }
+
+    return ApiResponse.success(res, { user }, "User fetched successfully");
+  } catch (error) {
+    return next(error);
+  }
+};
+
+module.exports = {
+  register,
+  login,
+  refreshToken,
+  logout,
+  getMe,
+};
+module.exports.default = {
+  register,
+  login,
+  refreshToken,
+  logout,
+  getMe,
+};
