@@ -9,6 +9,7 @@ import Badge from "../components/ui/Badge";
 import Avatar from "../components/ui/Avatar";
 import Button from "../components/ui/Button";
 import ExpenseCard from "../components/expenses/ExpenseCard";
+import AddExpenseModal from "../components/expenses/AddExpenseModal";
 import SettlementSuggestions from "../components/settlements/SettlementSuggestions";
 import AddMemberModal from "../components/groups/AddMemberModal";
 
@@ -26,9 +27,10 @@ export default function GroupDetailPage() {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("expenses");
   const [isAddMemberOpen, setIsAddMemberOpen] = useState(false);
+  const [isAddExpenseOpen, setIsAddExpenseOpen] = useState(false);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["group", id],
+    queryKey: ["groups", id],
     queryFn: () => getGroupById(id),
     enabled: Boolean(id),
   });
@@ -36,7 +38,7 @@ export default function GroupDetailPage() {
   const addMemberMutation = useMutation({
     mutationFn: (email) => addMember(id, email),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["group", id] });
+      queryClient.invalidateQueries({ queryKey: ["groups", id] });
       queryClient.invalidateQueries({ queryKey: ["groups"] });
       toast.success("Member added successfully");
       setIsAddMemberOpen(false);
@@ -48,8 +50,37 @@ export default function GroupDetailPage() {
 
   const group = data?.data?.group;
 
-  const balances = useMemo(() => group?.balances || [], [group]);
-  const expenses = useMemo(() => group?.expenses || [], [group]);
+  const balances = useMemo(() => {
+    if (!group) return [];
+    const { members, expenses = [] } = group;
+    if (!members) return [];
+
+    const balanceMap = {};
+    for (const member of members) {
+      balanceMap[member.userId || member.user?.id] = 0;
+    }
+    for (const expense of expenses) {
+      const paidById = expense.paidById || expense.paidBy?.id;
+      if (paidById) balanceMap[paidById] = (balanceMap[paidById] || 0) + Number(expense.amount);
+      for (const share of expense.shares || []) {
+        const uid = share.userId || share.user?.id;
+        if (uid) balanceMap[uid] = (balanceMap[uid] || 0) - Number(share.amount);
+      }
+    }
+
+    return members.map((member) => {
+      const uid = member.userId || member.user?.id;
+      return {
+        userId: uid,
+        name: member.user?.name || "Member",
+        avatar: member.user?.avatar || null,
+        balance: balanceMap[uid] || 0,
+      };
+    });
+  }, [group]);
+
+  const expensesList = useMemo(() => group?.expenses || [], [group]);
+  const members = useMemo(() => group?.members || [], [group]);
 
   if (isLoading) {
     return <div className="h-48 animate-pulse rounded-2xl bg-surface-200" />;
@@ -75,15 +106,20 @@ export default function GroupDetailPage() {
             {group.description ? <p className="mt-2 text-sm text-surface-600">{group.description}</p> : null}
 
             <div className="mt-4 flex items-center gap-2">
-              {group.members?.map((member) => (
-                <Avatar key={member.id} user={member.user} size="sm" />
+              {members.map((member) => (
+                <Avatar key={member.id || member.userId} user={member.user} size="sm" />
               ))}
             </div>
           </div>
 
-          <Button leftIcon={<Plus size={16} />} onClick={() => setIsAddMemberOpen(true)}>
-            Add Member
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" leftIcon={<Plus size={16} />} onClick={() => setIsAddMemberOpen(true)}>
+              Add Member
+            </Button>
+            <Button leftIcon={<Plus size={16} />} onClick={() => setIsAddExpenseOpen(true)}>
+              Add Expense
+            </Button>
+          </div>
         </div>
       </Card>
 
@@ -102,15 +138,9 @@ export default function GroupDetailPage() {
 
       {activeTab === "expenses" ? (
         <div className="space-y-4">
-          <div className="flex justify-end">
-            <Button variant="outline" leftIcon={<Plus size={16} />} onClick={() => toast("Add expense flow coming next") }>
-              Add Expense
-            </Button>
-          </div>
-
-          {expenses.length ? (
+          {expensesList.length ? (
             <div className="space-y-3">
-              {expenses.map((expense) => (
+              {expensesList.map((expense) => (
                 <ExpenseCard key={expense.id} expense={expense} />
               ))}
             </div>
@@ -164,6 +194,17 @@ export default function GroupDetailPage() {
         onClose={() => setIsAddMemberOpen(false)}
         onSubmit={(email) => addMemberMutation.mutateAsync(email)}
         loading={addMemberMutation.isPending}
+      />
+
+      <AddExpenseModal
+        isOpen={isAddExpenseOpen}
+        onClose={() => setIsAddExpenseOpen(false)}
+        groupId={id}
+        members={members}
+        onCreated={() => {
+          queryClient.invalidateQueries({ queryKey: ["groups", id] });
+          queryClient.invalidateQueries({ queryKey: ["expenses", id] });
+        }}
       />
     </div>
   );

@@ -1,12 +1,9 @@
 import { createContext, useCallback, useEffect, useMemo } from "react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 import { getMe, loginUser, logoutUser, registerUser } from "../api/auth.api";
 import useAuthStore from "../store/authStore";
 
 export const AuthContext = createContext(undefined);
-
-const queryClient = new QueryClient();
 
 const ACCESS_TOKEN_KEY = "splitora_token";
 
@@ -65,7 +62,7 @@ export function AuthProvider({ children }) {
       const { accessToken: nextAccessToken, refreshToken: nextRefreshToken } = extractTokens(response);
 
       setAuth(nextUser, nextAccessToken, nextRefreshToken);
-      toast.success("Logged in successfully");
+      toast.success("Welcome back!");
 
       return nextUser;
     },
@@ -79,7 +76,9 @@ export function AuthProvider({ children }) {
       const { accessToken: nextAccessToken, refreshToken: nextRefreshToken } = extractTokens(response);
 
       setAuth(nextUser, nextAccessToken, nextRefreshToken);
-      toast.success("Registered successfully");
+      toast.success("Account created!");
+
+      return nextUser;
     },
     [setAuth]
   );
@@ -113,9 +112,7 @@ export function AuthProvider({ children }) {
   );
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
-    </QueryClientProvider>
+    <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
   );
 }
 

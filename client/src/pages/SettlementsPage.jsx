@@ -1,8 +1,10 @@
 import { useMemo, useState } from "react";
+import { useQueries } from "@tanstack/react-query";
 import Card from "../components/ui/Card";
 import Button from "../components/ui/Button";
 import SettlementCard from "../components/settlements/SettlementCard";
-import useSettlements from "../hooks/useSettlements";
+import { useGroups } from "../hooks/useGroups";
+import { getGroupSettlements } from "../api/settlements.api";
 
 const FILTERS = ["all", "pending", "completed"];
 
@@ -15,26 +17,49 @@ const formatCurrency = (value) =>
 
 export default function SettlementsPage() {
   const [activeFilter, setActiveFilter] = useState("all");
-  const { settlementsQuery } = useSettlements({ status: activeFilter });
-  const { data, isLoading } = settlementsQuery;
 
-  const settlements = data?.data?.settlements || data?.data || [];
+  const { data: groupsData, isLoading: groupsLoading } = useGroups();
+  const groups = groupsData?.data?.groups || [];
+
+  const settlementQueries = useQueries({
+    queries: groups.map((group) => ({
+      queryKey: ["settlements", group.id],
+      queryFn: () => getGroupSettlements(group.id),
+      enabled: Boolean(group.id),
+    })),
+  });
+
+  const isLoading = groupsLoading || settlementQueries.some((q) => q.isLoading);
+
+  const allSettlements = useMemo(() => {
+    return groups.flatMap((group, idx) => {
+      const raw = settlementQueries[idx]?.data?.data?.settlements || [];
+      return raw.map((s) => ({ ...s, group }));
+    });
+  }, [groups, settlementQueries]);
+
+  const filtered = useMemo(() => {
+    if (activeFilter === "all") return allSettlements;
+    return allSettlements.filter(
+      (s) => (s.status || "pending").toLowerCase() === activeFilter
+    );
+  }, [allSettlements, activeFilter]);
 
   const groupedSettlements = useMemo(() => {
-    return settlements.reduce((acc, settlement) => {
-      const groupName = settlement?.group?.name || settlement?.groupName || "Ungrouped";
+    return filtered.reduce((acc, settlement) => {
+      const groupName = settlement?.group?.name || "Ungrouped";
       if (!acc[groupName]) acc[groupName] = [];
       acc[groupName].push(settlement);
       return acc;
     }, {});
-  }, [settlements]);
+  }, [filtered]);
 
   const totalPendingAmount = useMemo(
     () =>
-      settlements
-        .filter((settlement) => (settlement?.status || "pending").toLowerCase() === "pending")
-        .reduce((sum, settlement) => sum + Number(settlement?.amount || 0), 0),
-    [settlements]
+      allSettlements
+        .filter((s) => (s.status || "pending").toLowerCase() === "pending")
+        .reduce((sum, s) => sum + Number(s.amount || 0), 0),
+    [allSettlements]
   );
 
   if (isLoading) {

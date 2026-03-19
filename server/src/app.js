@@ -1,8 +1,9 @@
 const express = require("express");
-const helmet = require("helmet");
 const cors = require("cors");
-const morgan = require("morgan");
+const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
+const cookieParser = require("cookie-parser");
+const morgan = require("morgan");
 
 const authRoutes = require("./routes/auth.routes");
 const groupRoutes = require("./routes/group.routes");
@@ -12,7 +13,12 @@ const errorHandler = require("./middleware/error.middleware");
 
 const app = express();
 
-const allowedOrigins = ["http://localhost:5173", "http://127.0.0.1:5173", process.env.CLIENT_URL].filter(Boolean);
+const allowedOrigins = [
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+  "http://localhost:3000",
+  process.env.CLIENT_URL,
+].filter(Boolean);
 
 const corsOptions = {
   origin(origin, callback) {
@@ -21,7 +27,7 @@ const corsOptions = {
     return callback(new Error("Not allowed by CORS"));
   },
   credentials: true,
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
 };
 
@@ -30,18 +36,16 @@ const limiter = rateLimit({
   max: 100,
   standardHeaders: true,
   legacyHeaders: false,
-  skip: (req) => process.env.NODE_ENV === "development",
+  skip: () => process.env.NODE_ENV === "development",
 });
 
-app.use(helmet());
 app.use(cors(corsOptions));
-app.options(/.*/, cors(corsOptions));
+app.options("*", cors(corsOptions));
+app.use(helmet());
 app.use(limiter);
 app.use(express.json());
-
-if (process.env.NODE_ENV === "development") {
-  app.use(morgan("dev"));
-}
+app.use(cookieParser());
+app.use(morgan("dev"));
 
 app.use("/api/auth", authRoutes);
 app.use("/api/groups", groupRoutes);
