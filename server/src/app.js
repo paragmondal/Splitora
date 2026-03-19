@@ -1,66 +1,42 @@
-const express = require("express");
-const cors = require("cors");
-const helmet = require("helmet");
-const rateLimit = require("express-rate-limit");
-const cookieParser = require("cookie-parser");
-const morgan = require("morgan");
+require('dotenv').config()
+const express = require('express')
+const cors = require('cors')
+const helmet = require('helmet')
+const morgan = require('morgan')
+const cookieParser = require('cookie-parser')
+const rateLimit = require('express-rate-limit')
 
-const authRoutes = require("./routes/auth.routes");
-const groupRoutes = require("./routes/group.routes");
-const expenseRoutes = require("./routes/expense.routes");
-const settlementRoutes = require("./routes/settlement.routes");
-const errorHandler = require("./middleware/error.middleware");
+const app = express()
 
-const app = express();
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  credentials: false
+}))
 
-const allowedOrigins = [
-  "http://localhost:5173",
-  "http://127.0.0.1:5173",
-  "http://localhost:3000",
-  process.env.CLIENT_URL,
-].filter(Boolean);
+app.options('*', (req, res) => {
+  res.header('Access-Control-Allow-Origin', '*')
+  res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH')
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With')
+  res.sendStatus(200)
+})
 
-const corsOptions = {
-  origin(origin, callback) {
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) return callback(null, true);
-    return callback(new Error("Not allowed by CORS"));
-  },
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
-};
+app.use(helmet({ crossOriginResourcePolicy: false }))
+app.use(express.json())
+app.use(express.urlencoded({ extended: true }))
+app.use(cookieParser())
+app.use(morgan('dev'))
 
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
-  standardHeaders: true,
-  legacyHeaders: false,
-  skip: () => process.env.NODE_ENV === "development",
-});
+app.use('/api/auth', require('./routes/auth.routes'))
+app.use('/api/groups', require('./routes/group.routes'))
+app.use('/api/expenses', require('./routes/expense.routes'))
+app.use('/api/settlements', require('./routes/settlement.routes'))
 
-app.use(cors(corsOptions));
-app.options("*", cors(corsOptions));
-app.use(helmet());
-app.use(limiter);
-app.use(express.json());
-app.use(cookieParser());
-app.use(morgan("dev"));
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'OK', timestamp: new Date(), uptime: process.uptime() })
+})
 
-app.use("/api/auth", authRoutes);
-app.use("/api/groups", groupRoutes);
-app.use("/api/expenses", expenseRoutes);
-app.use("/api/settlements", settlementRoutes);
+app.use(require('./middleware/error.middleware'))
 
-app.get("/api/health", (_req, res) => {
-  return res.status(200).json({
-    status: "OK",
-    uptime: process.uptime(),
-    timestamp: new Date().toISOString(),
-  });
-});
-
-app.use(errorHandler);
-
-module.exports = app;
-module.exports.default = app;
+module.exports = app
