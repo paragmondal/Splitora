@@ -1,5 +1,6 @@
 const prisma = require("../config/db");
 const ApiResponse = require("../utils/apiResponse");
+const createActivity = require("../utils/createActivity");
 
 const getUserId = (req) => req.user && req.user.userId;
 
@@ -244,6 +245,14 @@ const createExpense = async (req, res, next) => {
           },
         },
       });
+    });
+
+    const group = await prisma.group.findUnique({ where: { id: groupId }, select: { name: true } });
+    await createActivity(prisma, {
+      type: 'expense_added',
+      message: `${result?.paidBy?.name || 'Someone'} added ${title} ₹${Number(amount)} to ${group?.name || 'group'}`,
+      groupId,
+      userId: requesterId,
     });
 
     return ApiResponse.success(res, { expense: result }, "Expense created successfully", 201);

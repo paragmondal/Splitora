@@ -2,6 +2,7 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const prisma = require("../config/db");
 const ApiResponse = require("../utils/apiResponse");
+const createActivity = require("../utils/createActivity");
 
 const ACCESS_TOKEN_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "15m";
 const REFRESH_TOKEN_EXPIRES_IN = process.env.JWT_REFRESH_EXPIRES_IN || "7d";
@@ -76,6 +77,12 @@ const register = async (req, res, next) => {
         userId: user.id,
         expiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL_MS),
       },
+    });
+
+    await createActivity(prisma, {
+      type: 'user_joined',
+      message: `${user.name} joined Splitora`,
+      userId: user.id,
     });
 
     return ApiResponse.success(
@@ -225,12 +232,94 @@ const getMe = async (req, res, next) => {
   }
 };
 
+const updateProfile = async (req, res, next) => {
+  try {
+    const userId = req.user && req.user.userId;
+
+    if (!userId) {
+      return ApiResponse.error(res, "Unauthorized", 401);
+    }
+
+    const { name, avatar } = req.body;
+
+    const data = {};
+    if (name !== undefined) {
+      const trimmed = String(name).trim();
+      if (!trimmed) return ApiResponse.error(res, "Name cannot be empty", 400);
+      data.name = trimmed;
+    }
+    if (avatar !== undefined) {
+      data.avatar = avatar || null;
+    }
+
+    if (Object.keys(data).length === 0) {
+      return ApiResponse.error(res, "No fields provided for update", 400);
+    }
+
+    const user = await prisma.user.update({
+      where: { id: userId },
+      data,
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        avatar: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    return ApiResponse.success(res, { user }, "Profile updated successfully");
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const updatePassword = async (req, res, next) => {
+  try {
+    const userId = req.user && req.user.userId;
+
+    if (!userId) {
+      return ApiResponse.error(res, "Unauthorized", 401);
+    }
+
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      return ApiResponse.error(res, "currentPassword and newPassword are required", 400);
+    }
+
+    if (String(newPassword).length < 6) {
+      return ApiResponse.error(res, "New password must be at least 6 characters", 400);
+    }
+
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      return ApiResponse.error(res, "User not found", 404);
+    }
+
+    const isMatch = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!isMatch) {
+      return ApiResponse.error(res, "Current password is incorrect", 400);
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+    await prisma.user.update({ where: { id: userId }, data: { passwordHash } });
+
+    return ApiResponse.success(res, null, "Password updated successfully");
+  } catch (error) {
+    return next(error);
+  }
+};
+
 module.exports = {
   register,
   login,
   refreshToken,
   logout,
   getMe,
+  updateProfile,
+  updatePassword,
 };
 module.exports.default = {
   register,
@@ -238,4 +327,6 @@ module.exports.default = {
   refreshToken,
   logout,
   getMe,
+  updateProfile,
+  updatePassword,
 };

@@ -1,5 +1,6 @@
 const prisma = require("../config/db");
 const ApiResponse = require("../utils/apiResponse");
+const createActivity = require("../utils/createActivity");
 const {
   calculateBalances,
   simplifyDebts,
@@ -276,6 +277,13 @@ const confirmSettlement = async (req, res, next) => {
       }
 
       return settlement;
+    });
+
+    await createActivity(prisma, {
+      type: 'settlement_done',
+      message: `${confirmedSettlement.payer?.name || 'Someone'} paid ${confirmedSettlement.receiver?.name || 'Someone'} ₹${Number(confirmedSettlement.amount)}`,
+      groupId: confirmedSettlement.groupId,
+      userId: requesterId,
     });
 
     return ApiResponse.success(

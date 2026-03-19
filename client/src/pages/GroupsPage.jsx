@@ -8,8 +8,7 @@ import Button from "../components/ui/Button";
 import Input from "../components/ui/Input";
 import Modal from "../components/ui/Modal";
 import EmptyState from "../components/ui/EmptyState";
-
-const CATEGORIES = ["travel", "food", "home", "event", "general"];
+import { categoryConfig } from "../utils/categoryConfig";
 
 export default function GroupsPage() {
   const queryClient = useQueryClient();
@@ -111,18 +110,24 @@ export default function GroupsPage() {
           />
 
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-surface-700">Category</label>
-            <select
-              className="h-11 w-full rounded-xl border border-surface-300 bg-surface-50 px-3 text-surface-900 focus:outline-none focus:ring-2 focus:ring-primary-200"
-              value={form.category}
-              onChange={(e) => setForm((prev) => ({ ...prev, category: e.target.value }))}
-            >
-              {CATEGORIES.map((category) => (
-                <option key={category} value={category}>
-                  {category[0].toUpperCase() + category.slice(1)}
-                </option>
+            <label className="mb-2 block text-sm font-medium text-surface-700">Category</label>
+            <div className="grid grid-cols-4 gap-2">
+              {Object.entries(categoryConfig).map(([key, cat]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setForm((prev) => ({ ...prev, category: key }))}
+                  className={`flex flex-col items-center gap-1 rounded-xl border-2 px-2 py-2 text-xs font-medium transition-colors ${
+                    form.category === key
+                      ? "border-primary-500 bg-primary-50 text-primary-700"
+                      : "border-surface-200 bg-surface-50 text-surface-700 hover:border-surface-300"
+                  }`}
+                >
+                  <span className="text-lg">{cat.icon}</span>
+                  <span>{cat.label}</span>
+                </button>
               ))}
-            </select>
+            </div>
           </div>
 
           <div className="flex justify-end gap-2">

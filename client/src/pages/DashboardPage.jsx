@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { format, isSameMonth } from "date-fns";
@@ -11,7 +11,10 @@ import Card from "../components/ui/Card";
 import Badge from "../components/ui/Badge";
 import Avatar from "../components/ui/Avatar";
 import Button from "../components/ui/Button";
+import Modal from "../components/ui/Modal";
 import GroupCard from "../components/groups/GroupCard";
+import ActivityFeed from "../components/activity/ActivityFeed";
+import AddExpenseModal from "../components/expenses/AddExpenseModal";
 
 const formatCurrency = (value) =>
   new Intl.NumberFormat("en-IN", {
@@ -25,6 +28,9 @@ const SkeletonBlock = ({ className }) => <div className={`animate-pulse rounded-
 export default function DashboardPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const [isFabExpenseOpen, setIsFabExpenseOpen] = useState(false);
+  const [fabGroupId, setFabGroupId] = useState("");
+  const [isFabGroupSelectOpen, setIsFabGroupSelectOpen] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ["dashboard", user?.id],
@@ -239,6 +245,61 @@ export default function DashboardPage() {
           </div>
         </Card>
       </section>
+
+      <section>
+        <Card>
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-surface-900">Recent Activity</h2>
+          </div>
+          <ActivityFeed />
+        </Card>
+      </section>
+
+      {/* Floating Action Button */}
+      <div className="group fixed bottom-6 right-6 z-50">
+        <button
+          type="button"
+          onClick={() => setIsFabGroupSelectOpen(true)}
+          className="flex h-14 w-14 items-center justify-center rounded-full bg-primary-600 text-white shadow-lg transition-transform hover:scale-110 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-400 focus:ring-offset-2"
+          aria-label="Add expense"
+        >
+          <Plus size={24} />
+        </button>
+        <span className="pointer-events-none absolute bottom-16 right-0 rounded-lg bg-surface-900 px-2 py-1 text-xs text-white opacity-0 transition-opacity group-hover:opacity-100 whitespace-nowrap">
+          Add expense
+        </span>
+      </div>
+
+      {/* Group Selector Modal for FAB */}
+      <Modal isOpen={isFabGroupSelectOpen} onClose={() => setIsFabGroupSelectOpen(false)} title="Select Group" size="sm">
+        <div className="space-y-2">
+          <p className="text-sm text-surface-600">Choose a group to add an expense to:</p>
+          {(data?.recentGroups || []).map((group) => (
+            <button
+              key={group.id}
+              type="button"
+              className="w-full rounded-xl border border-surface-200 bg-surface-50 px-4 py-3 text-left text-sm font-medium text-surface-900 hover:bg-surface-100"
+              onClick={() => {
+                setFabGroupId(group.id);
+                setIsFabGroupSelectOpen(false);
+                setIsFabExpenseOpen(true);
+              }}
+            >
+              {group.name}
+            </button>
+          ))}
+        </div>
+      </Modal>
+
+      {isFabExpenseOpen && fabGroupId && (
+        <AddExpenseModal
+          isOpen={isFabExpenseOpen}
+          onClose={() => { setIsFabExpenseOpen(false); setFabGroupId(""); }}
+          groupId={fabGroupId}
+          members={[]}
+          onCreated={() => { setIsFabExpenseOpen(false); setFabGroupId(""); }}
+        />
+      )}
     </div>
   );
 }

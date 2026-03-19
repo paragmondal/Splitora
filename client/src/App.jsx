@@ -10,6 +10,7 @@ import GroupsPage from "./pages/GroupsPage";
 import GroupDetailPage from "./pages/GroupDetailPage";
 import SettlementsPage from "./pages/SettlementsPage";
 import ProfilePage from "./pages/ProfilePage";
+import JoinGroupPage from "./pages/JoinGroupPage";
 
 function FullPageSpinner() {
   return (
@@ -121,6 +122,14 @@ function AppRoutes() {
           element={
             <ProtectedRoute>
               <ProfilePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/join/:code"
+          element={
+            <ProtectedRoute>
+              <JoinGroupPage />
             </ProtectedRoute>
           }
         />

@@ -1,5 +1,6 @@
 const prisma = require("../config/db");
 const ApiResponse = require("../utils/apiResponse");
+const createActivity = require("../utils/createActivity");
 
 const getUserId = (req) => req.user && req.user.userId;
 
@@ -43,6 +44,15 @@ const createGroup = async (req, res, next) => {
           },
         },
       },
+    });
+
+    // Fetch creator name for activity
+    const creator = group.members.find((m) => m.userId === userId)?.user;
+    await createActivity(prisma, {
+      type: 'group_created',
+      message: `${creator?.name || 'Someone'} created group ${group.name}`,
+      groupId: group.id,
+      userId,
     });
 
     return ApiResponse.success(res, { group }, "Group created successfully", 201);
@@ -402,6 +412,14 @@ const addMember = async (req, res, next) => {
       },
     });
 
+    const group = await prisma.group.findUnique({ where: { id: groupId }, select: { name: true } });
+    await createActivity(prisma, {
+      type: 'member_added',
+      message: `${userToAdd.name} was added to ${group?.name || 'group'}`,
+      groupId,
+      userId,
+    });
+
     return ApiResponse.success(res, { member: newMember }, "Member added successfully", 201);
   } catch (err) {
     return next(err);
@@ -589,6 +607,89 @@ const leaveGroup = async (req, res, next) => {
   }
 };
 
+const { randomBytes } = require("crypto");
+
+const generateInviteCode = async (req, res, next) => {
+  try {
+    const userId = getUserId(req);
+    const groupId = req.params.id;
+
+    if (!userId) {
+      return ApiResponse.error(res, "Unauthorized", 401);
+    }
+
+    const membership = await prisma.groupMember.findUnique({
+      where: { userId_groupId: { userId, groupId } },
+      select: { role: true },
+    });
+
+    if (!membership) {
+      return ApiResponse.error(res, "Access denied: not a group member", 403);
+    }
+
+    if (membership.role !== "admin") {
+      return ApiResponse.error(res, "Only group admin can generate invite link", 403);
+    }
+
+    const inviteCode = randomBytes(8).toString("hex"); // 16 chars hex
+
+    const group = await prisma.group.update({
+      where: { id: groupId },
+      data: { inviteCode },
+      select: { id: true, name: true, inviteCode: true },
+    });
+
+    return ApiResponse.success(res, { group }, "Invite code generated successfully");
+  } catch (err) {
+    return next(err);
+  }
+};
+
+const joinByInviteCode = async (req, res, next) => {
+  try {
+    const userId = getUserId(req);
+    const { code } = req.params;
+
+    if (!userId) {
+      return ApiResponse.error(res, "Unauthorized", 401);
+    }
+
+    const group = await prisma.group.findUnique({
+      where: { inviteCode: code },
+      select: { id: true, name: true },
+    });
+
+    if (!group) {
+      return ApiResponse.error(res, "Invalid or expired invite link", 404);
+    }
+
+    const existing = await prisma.groupMember.findUnique({
+      where: { userId_groupId: { userId, groupId: group.id } },
+      select: { id: true },
+    });
+
+    if (existing) {
+      return ApiResponse.success(res, { group }, "You are already a member of this group");
+    }
+
+    await prisma.groupMember.create({
+      data: { userId, groupId: group.id, role: "member" },
+    });
+
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { name: true } });
+    await createActivity(prisma, {
+      type: 'member_added',
+      message: `${user?.name || 'Someone'} joined ${group.name} via invite link`,
+      groupId: group.id,
+      userId,
+    });
+
+    return ApiResponse.success(res, { group }, "You joined the group successfully");
+  } catch (err) {
+    return next(err);
+  }
+};
+
 module.exports = {
   createGroup,
   getMyGroups,
@@ -598,6 +699,8 @@ module.exports = {
   addMember,
   removeMember,
   leaveGroup,
+  generateInviteCode,
+  joinByInviteCode,
 };
 module.exports.default = {
   createGroup,
@@ -608,4 +711,6 @@ module.exports.default = {
   addMember,
   removeMember,
   leaveGroup,
+  generateInviteCode,
+  joinByInviteCode,
 };

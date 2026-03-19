@@ -8,6 +8,8 @@ const {
   refreshToken,
   logout,
   getMe,
+  updateProfile,
+  updatePassword,
 } = require("../controllers/auth.controller");
 
 const router = express.Router();
@@ -38,6 +40,8 @@ router.post(
 router.post("/refresh", refreshToken);
 router.post("/logout", protect, logout);
 router.get("/me", protect, getMe);
+router.put("/profile", protect, updateProfile);
+router.put("/password", protect, updatePassword);
 
 module.exports = router;
 module.exports.default = router;

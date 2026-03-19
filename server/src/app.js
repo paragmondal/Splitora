@@ -43,6 +43,8 @@ app.use('/api/auth', require('./routes/auth.routes'))
 app.use('/api/groups', require('./routes/group.routes'))
 app.use('/api/expenses', require('./routes/expense.routes'))
 app.use('/api/settlements', require('./routes/settlement.routes'))
+app.use('/api/activity', require('./routes/activity.routes'))
+app.use('/api/stats', require('./routes/stats.routes'))
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date(), uptime: process.uptime() })
