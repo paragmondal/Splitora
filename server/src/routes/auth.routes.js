@@ -36,8 +36,7 @@ router.post(
 );
 
 router.post("/refresh", refreshToken);
-router.post("/logout", protect, logout);
+router.post("/logout", logout);
 router.get("/me", protect, getMe);
 
 module.exports = router;
-module.exports.default = router;

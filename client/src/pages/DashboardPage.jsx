@@ -52,7 +52,11 @@ export default function DashboardPage() {
       ]);
 
       const allExpenses = expenseResponses
-        .flatMap((response) => response?.data || [])
+        .flatMap((response) => {
+          if (Array.isArray(response?.data)) return response.data
+          if (Array.isArray(response)) return response
+          return []
+        })
         .map((expense) => ({
           ...expense,
           groupName: groupMap[expense.groupId]?.name || "Unknown group",
