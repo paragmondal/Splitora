@@ -6,6 +6,7 @@ const REFRESH_TOKEN_KEY = "splitora_refresh_token";
 const api = axios.create({
   baseURL: 'https://splitora-api.onrender.com/api',
   withCredentials: false,
+  timeout: 60000,
   headers: {
     'Content-Type': 'application/json'
   }
