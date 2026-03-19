@@ -1,49 +1,31 @@
-const dotenv = require("dotenv");
+require('dotenv').config()
+const app = require('./app')
+const prisma = require('./config/db')
 
-dotenv.config();
+const PORT = process.env.PORT || 10000
 
-const app = require("./app");
-const prisma = require("./config/db");
-
-const PORT = process.env.PORT || 5000;
-let server;
-
-const shutdown = async (code = 0) => {
+async function main() {
   try {
-    if (server) {
-      await new Promise((resolve) => server.close(resolve));
-    }
-    await prisma.$disconnect();
+    await prisma.$connect()
+    console.log('Database connected successfully')
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`Splitora server is running on port ${PORT}`)
+      console.log(`Environment: ${process.env.NODE_ENV}`)
+    })
   } catch (error) {
-    console.error("⚠️ Error during shutdown:", error);
-  } finally {
-    process.exit(code);
+    console.error('Failed to start server:', error)
+    process.exit(1)
   }
-};
+}
 
-const startServer = async () => {
-  try {
-    await prisma.$connect();
-    console.log("🗄️ Database connected successfully");
+main()
 
-    server = app.listen(PORT, () => {
-      console.log(`🚀 Splitora server is running on port ${PORT}`);
-      console.log(`🌐 Environment: ${process.env.NODE_ENV || "development"}`);
-    });
-  } catch (error) {
-    console.error("❌ Failed to start server:", error);
-    await shutdown(1);
-  }
-};
+process.on('unhandledRejection', (err) => {
+  console.error('Unhandled rejection:', err)
+  process.exit(1)
+})
 
-process.on("unhandledRejection", async (reason) => {
-  console.error("⚠️ Unhandled Rejection:", reason);
-  await shutdown(1);
-});
-
-process.on("uncaughtException", async (error) => {
-  console.error("💥 Uncaught Exception:", error);
-  await shutdown(1);
-});
-
-startServer();
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught exception:', err)
+  process.exit(1)
+})

@@ -8,6 +8,8 @@ const rateLimit = require('express-rate-limit')
 
 const app = express()
 
+app.set('trust proxy', 1)
+
 app.use(cors({
   origin: '*',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
@@ -23,6 +25,15 @@ app.options('*', (req, res) => {
 })
 
 app.use(helmet({ crossOriginResourcePolicy: false }))
+
+app.use(rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: () => process.env.NODE_ENV === 'development'
+}))
+
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
 app.use(cookieParser())
