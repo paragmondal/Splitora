@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createExpense, deleteExpense, getGroupExpenses } from "../api/expenses.api";
+import { createExpense, deleteExpense, getGroupExpenses, updateExpense } from "../api/expenses.api";
 
 export function useGroupExpenses(groupId) {
   return useQuery({
@@ -20,6 +20,21 @@ export function useCreateExpense() {
 
       queryClient.invalidateQueries({ queryKey: ["groups", groupId] });
       queryClient.invalidateQueries({ queryKey: ["expenses", groupId] });
+    },
+  });
+}
+
+export function useUpdateExpense() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, data }) => updateExpense(id, data),
+    onSuccess: (_, variables) => {
+      const groupId = variables?.data?.groupId;
+      if (groupId) {
+        queryClient.invalidateQueries({ queryKey: ["groups", groupId] });
+        queryClient.invalidateQueries({ queryKey: ["expenses", groupId] });
+      }
     },
   });
 }

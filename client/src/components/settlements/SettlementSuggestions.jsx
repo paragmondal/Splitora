@@ -1,6 +1,8 @@
 import { ArrowRight } from "lucide-react";
 import toast from "react-hot-toast";
-import useSettlements from "../../hooks/useSettlements";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { createSettlement, confirmSettlement } from "../../api/settlements.api";
+import { useSettlementSuggestions } from "../../hooks/useSettlements";
 import Card from "../ui/Card";
 import Avatar from "../ui/Avatar";
 import Button from "../ui/Button";
@@ -13,8 +15,31 @@ const formatCurrency = (value) =>
   }).format(value || 0);
 
 export default function SettlementSuggestions({ groupId }) {
-  const { suggestionsQuery, confirmSettlementMutation } = useSettlements({ groupId });
-  const { data, isLoading } = suggestionsQuery;
+  const queryClient = useQueryClient();
+  const { data, isLoading } = useSettlementSuggestions(groupId);
+
+  const markSettledMutation = useMutation({
+    mutationFn: async ({ from, to, amount }) => {
+      const created = await createSettlement({
+        groupId,
+        payerId: from,
+        receiverId: to,
+        amount,
+      });
+      const settlementId = created?.data?.settlement?.id;
+      if (settlementId) {
+        await confirmSettlement(settlementId);
+      }
+    },
+    onSuccess: () => {
+      toast.success("Settlement recorded");
+      queryClient.invalidateQueries({ queryKey: ["settlement-suggestions", groupId] });
+      queryClient.invalidateQueries({ queryKey: ["settlements", groupId] });
+    },
+    onError: (error) => {
+      toast.error(error?.response?.data?.message || "Failed to record settlement");
+    },
+  });
 
   const suggestions = data?.data?.suggestions || [];
 
@@ -23,23 +48,12 @@ export default function SettlementSuggestions({ groupId }) {
   }
 
   if (!suggestions.length) {
-    return <p className="text-sm text-surface-600">No settlement suggestions right now.</p>;
+    return (
+      <p className="text-sm text-surface-600 py-4 text-center">
+        All settled up! 🎉
+      </p>
+    );
   }
-
-  const handleConfirm = async (settlementId) => {
-    const isConfirmed = window.confirm("Mark this settlement as completed?");
-    if (!isConfirmed) {
-      return;
-    }
-
-    try {
-      await confirmSettlementMutation.mutateAsync(settlementId);
-      toast.success("Settlement marked as completed");
-      await suggestionsQuery.refetch();
-    } catch (error) {
-      toast.error(error?.response?.data?.message || "Failed to confirm settlement");
-    }
-  };
 
   return (
     <div className="space-y-3">
@@ -60,10 +74,16 @@ export default function SettlementSuggestions({ groupId }) {
             <Button
               size="sm"
               className="ml-auto"
-              loading={confirmSettlementMutation.isPending}
-              onClick={() => handleConfirm(item.settlementId)}
+              loading={markSettledMutation.isPending}
+              onClick={() =>
+                markSettledMutation.mutate({
+                  from: item.from,
+                  to: item.to,
+                  amount: item.amount,
+                })
+              }
             >
-              Mark as Settled
+              Mark Settled
             </Button>
           </div>
         </Card>
