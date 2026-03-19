@@ -1,36 +1,13 @@
-const dotenv = require("dotenv");
-const { Pool } = require("pg");
-const { PrismaPg } = require("@prisma/adapter-pg");
-const { PrismaClient } = require("@prisma/client");
+const { PrismaClient } = require('@prisma/client')
 
-dotenv.config();
+const globalForPrisma = global
 
-const globalForPrisma = global;
+const prisma = globalForPrisma.prisma ?? new PrismaClient({
+  log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error']
+})
 
-const databaseUrl = process.env.DATABASE_URL;
-if (!databaseUrl) {
-  throw new Error("DATABASE_URL is required");
+if (process.env.NODE_ENV !== 'production') {
+  globalForPrisma.prisma = prisma
 }
 
-const pool = globalForPrisma.__splitoraPgPool || new Pool({ connectionString: databaseUrl });
-const adapter = globalForPrisma.__splitoraPrismaAdapter || new PrismaPg(pool);
-
-const prisma = globalForPrisma.__splitoraPrisma || new PrismaClient({ adapter });
-
-if (process.env.NODE_ENV !== "production") {
-  globalForPrisma.__splitoraPgPool = pool;
-  globalForPrisma.__splitoraPrismaAdapter = adapter;
-  globalForPrisma.__splitoraPrisma = prisma;
-}
-
-prisma
-  .$connect()
-  .then(() => {
-    console.log("Prisma connected for Splitora");
-  })
-  .catch((error) => {
-    console.error("Prisma connection failed:", error);
-  });
-
-module.exports = prisma;
-module.exports.default = prisma;
+module.exports = prisma

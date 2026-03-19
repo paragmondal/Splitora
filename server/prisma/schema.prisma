@@ -3,7 +3,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model User {
@@ -15,7 +17,7 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  groupsCreated       Group[]        @relation("GroupCreator")
+  groupsCreated       Group[]
   memberships         GroupMember[]
   paidExpenses        Expense[]       @relation("PaidBy")
   expenseShares       ExpenseShare[]
@@ -29,29 +31,27 @@ model Group {
   name        String
   description String?
   category    String   @default("general")
-  createdById String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  createdBy   User          @relation("GroupCreator", fields: [createdById], references: [id])
+  createdById String
+  createdBy   User          @relation(fields: [createdById], references: [id])
   members     GroupMember[]
   expenses    Expense[]
   settlements Settlement[]
-
-  @@index([createdById])
 }
 
 model GroupMember {
   id       String   @id @default(uuid())
+  role     String   @default("member")
+  joinedAt DateTime @default(now())
+
   userId  String
   groupId String
-  role    String   @default("member")
-  joinedAt DateTime @default(now())
   user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   group   Group  @relation(fields: [groupId], references: [id], onDelete: Cascade)
 
   @@unique([userId, groupId])
-  @@index([groupId])
 }
 
 model Expense {
@@ -70,9 +70,6 @@ model Expense {
   group    Group          @relation(fields: [groupId], references: [id], onDelete: Cascade)
   paidBy   User           @relation("PaidBy", fields: [paidById], references: [id])
   shares   ExpenseShare[]
-
-  @@index([groupId])
-  @@index([paidById])
 }
 
 model ExpenseShare {
@@ -87,17 +84,16 @@ model ExpenseShare {
   user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([expenseId, userId])
-  @@index([userId])
 }
 
 model Settlement {
-  id              String   @id @default(uuid())
-  amount          Float
-  status          String   @default("pending")
-  paymentMethod   String?
-  transactionId   String?
-  note            String?
-  createdAt       DateTime @default(now())
+  id            String   @id @default(uuid())
+  amount        Float
+  status        String   @default("pending")
+  paymentMethod String?
+  transactionId String?
+  note          String?
+  createdAt     DateTime @default(now())
 
   groupId    String
   payerId    String
@@ -105,10 +101,6 @@ model Settlement {
   group      Group  @relation(fields: [groupId], references: [id], onDelete: Cascade)
   payer      User   @relation("Payer", fields: [payerId], references: [id])
   receiver   User   @relation("Receiver", fields: [receiverId], references: [id])
-
-  @@index([groupId])
-  @@index([payerId])
-  @@index([receiverId])
 }
 
 model RefreshToken {
@@ -119,6 +111,4 @@ model RefreshToken {
 
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
 }
