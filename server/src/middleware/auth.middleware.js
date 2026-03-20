@@ -1,58 +1,26 @@
-const jwt = require("jsonwebtoken");
-
-const getTokenFromHeader = (req) => {
-  const authHeader = req.headers.authorization;
-
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return null;
-  }
-
-  return authHeader.split(" ")[1] || null;
-};
-
+const jwt = require('jsonwebtoken')
 const protect = (req, res, next) => {
   try {
-    const token = getTokenFromHeader(req);
-
-    if (!token) {
-      return res.status(401).json({
-        success: false,
-        message: "Unauthorized: token missing",
-      });
+    const authHeader = req.headers.authorization
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ success: false, message: 'Unauthorized: token missing' })
     }
-
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = decoded;
-
-    return next();
+    const token = authHeader.split(' ')[1]
+    const decoded = jwt.verify(token, process.env.JWT_SECRET)
+    req.user = decoded
+    return next()
   } catch (error) {
-    return res.status(401).json({
-      success: false,
-      message: "Unauthorized: invalid token",
-    });
+    return res.status(401).json({ success: false, message: 'Unauthorized: invalid or expired token' })
   }
-};
-
-const optionalAuth = (req, _res, next) => {
+}
+const optionalAuth = (req, res, next) => {
   try {
-    const token = getTokenFromHeader(req);
-
-    if (token) {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      req.user = decoded;
+    const authHeader = req.headers.authorization
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1]
+      req.user = jwt.verify(token, process.env.JWT_SECRET)
     }
-
-    return next();
-  } catch (_error) {
-    return next();
-  }
-};
-
-module.exports = {
-  protect,
-  optionalAuth,
-};
-module.exports.default = {
-  protect,
-  optionalAuth,
-};
+  } catch {}
+  return next()
+}
+module.exports = { protect, optionalAuth }

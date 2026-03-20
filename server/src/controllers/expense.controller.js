@@ -1,5 +1,6 @@
 const prisma = require("../config/db");
 const ApiResponse = require("../utils/apiResponse");
+const { emitToGroup } = require("../utils/socketEmit");
 
 const getUserId = (req) => req.user && req.user.userId;
 
@@ -196,6 +197,7 @@ const createExpense = async (req, res, next) => {
       });
     });
 
+    emitToGroup(groupId, "expense-added", { expense: result });
     return ApiResponse.success(
       res,
       { expense: result },
@@ -482,6 +484,7 @@ const deleteExpense = async (req, res, next) => {
       );
 
     await prisma.expense.delete({ where: { id } });
+    emitToGroup(expense.groupId, "expense-deleted", { expenseId: id });
 
     return ApiResponse.success(res, null, "Expense deleted successfully");
   } catch (err) {

@@ -5,6 +5,7 @@ import Input from "../ui/Input";
 import Button from "../ui/Button";
 import SplitTypeSelector from "./SplitTypeSelector";
 import { createExpense } from "../../api/expenses.api";
+import SplitSuggestionBadge from "../ai/SplitSuggestionBadge";
 
 const CATEGORIES = ["general", "food", "travel", "home", "event"];
 
@@ -188,6 +189,7 @@ export default function AddExpenseModal({
               setForm((prev) => ({ ...prev, amount: e.target.value }))
             }
           />
+          <SplitSuggestionBadge groupId={groupId} expenseTitle={form.title} amount={form.amount} />
 
           <div>
             <label className="mb-1.5 block text-sm font-medium text-surface-700">

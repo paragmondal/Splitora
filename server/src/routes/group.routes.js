@@ -1,5 +1,5 @@
-const express = require("express");
-const { protect } = require("../middleware/auth.middleware");
+const express = require('express')
+const { protect } = require('../middleware/auth.middleware')
 const {
   createGroup,
   getMyGroups,
@@ -9,20 +9,23 @@ const {
   addMember,
   removeMember,
   leaveGroup,
-} = require("../controllers/group.controller");
+  generateInviteCode,
+  joinByInviteCode
+} = require('../controllers/group.controller')
 
-const router = express.Router();
+const router = express.Router()
 
-router.use(protect);
+router.use(protect)
 
-router.post("/", createGroup);
-router.get("/", getMyGroups);
-router.get("/:id", getGroupById);
-router.put("/:id", updateGroup);
-router.delete("/:id", deleteGroup);
-router.post("/:id/members", addMember);
-router.delete("/:id/members/:userId", removeMember);
-router.post("/:id/leave", leaveGroup);
+router.post('/', createGroup)
+router.get('/', getMyGroups)
+router.get('/:id', getGroupById)
+router.put('/:id', updateGroup)
+router.delete('/:id', deleteGroup)
+router.post('/:id/members', addMember)
+router.delete('/:id/members/:userId', removeMember)
+router.post('/:id/leave', leaveGroup)
+router.post('/:id/invite', generateInviteCode)
+router.post('/join/:code', joinByInviteCode)
 
-module.exports = router;
-module.exports.default = router;
+module.exports = router

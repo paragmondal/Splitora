@@ -4,6 +4,7 @@ const {
   calculateBalances,
   simplifyDebts,
 } = require("../services/settlement.service");
+const { emitToGroup } = require("../utils/socketEmit");
 
 const getUserId = (req) => req.user && req.user.userId;
 const toCents = (value) => Math.round(Number(value) * 100);
@@ -277,6 +278,8 @@ const confirmSettlement = async (req, res, next) => {
 
       return settlement;
     });
+
+    emitToGroup(existingSettlement.groupId, "settlement-confirmed", { settlement: confirmedSettlement });
 
     return ApiResponse.success(
       res,

@@ -16,7 +16,6 @@ model User {
   avatar       String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
-
   groupsCreated       Group[]
   memberships         GroupMember[]
   paidExpenses        Expense[]       @relation("PaidBy")
@@ -31,9 +30,9 @@ model Group {
   name        String
   description String?
   category    String   @default("general")
+  inviteCode  String?  @unique
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-
   createdById String
   createdBy   User          @relation(fields: [createdById], references: [id])
   members     GroupMember[]
@@ -45,12 +44,10 @@ model GroupMember {
   id       String   @id @default(uuid())
   role     String   @default("member")
   joinedAt DateTime @default(now())
-
   userId  String
   groupId String
   user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   group   Group  @relation(fields: [groupId], references: [id], onDelete: Cascade)
-
   @@unique([userId, groupId])
 }
 
@@ -64,7 +61,6 @@ model Expense {
   receiptUrl String?
   date       DateTime @default(now())
   createdAt  DateTime @default(now())
-
   groupId  String
   paidById String
   group    Group          @relation(fields: [groupId], references: [id], onDelete: Cascade)
@@ -77,24 +73,23 @@ model ExpenseShare {
   amount     Float
   percentage Float?
   isPaid     Boolean @default(false)
-
   expenseId String
   userId    String
   expense   Expense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
   user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-
   @@unique([expenseId, userId])
 }
 
 model Settlement {
-  id            String   @id @default(uuid())
-  amount        Float
-  status        String   @default("pending")
-  paymentMethod String?
-  transactionId String?
-  note          String?
-  createdAt     DateTime @default(now())
-
+  id                String   @id @default(uuid())
+  amount            Float
+  status            String   @default("pending")
+  paymentMethod     String?
+  transactionId     String?
+  razorpayOrderId   String?
+  razorpayPaymentId String?
+  note              String?
+  createdAt         DateTime @default(now())
   groupId    String
   payerId    String
   receiverId String
@@ -108,7 +103,6 @@ model RefreshToken {
   token     String   @unique
   expiresAt DateTime
   createdAt DateTime @default(now())
-
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

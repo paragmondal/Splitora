@@ -1,34 +1,8 @@
-import api from "./axios";
-
-export const loginUser = async (data) => {
-  const response = await api.post("/auth/login", data);
-  return response.data;
-};
-
-export const registerUser = async (data) => {
-  const response = await api.post("/auth/register", data);
-  return response.data;
-};
-
-export const logoutUser = async (token) => {
-  const response = await api.post("/auth/logout", { refreshToken: token });
-  return response.data;
-};
-
-export const getMe = async () => {
-  const response = await api.get("/auth/me");
-  return response.data;
-};
-
-export const refreshToken = async (token) => {
-  const response = await api.post("/auth/refresh", { refreshToken: token });
-  return response.data;
-};
-
-export default {
-  loginUser,
-  registerUser,
-  logoutUser,
-  getMe,
-  refreshToken,
-};
+import api from './axios'
+export const loginUser = async (data) => (await api.post('/auth/login', data)).data
+export const registerUser = async (data) => (await api.post('/auth/register', data)).data
+export const logoutUser = async (token) => (await api.post('/auth/logout', { refreshToken: token })).data
+export const getMe = async () => (await api.get('/auth/me')).data
+export const refreshAccessToken = async (token) => (await api.post('/auth/refresh', { refreshToken: token })).data
+export const updateProfile = async (data) => (await api.put('/auth/profile', data)).data
+export const changePassword = async (data) => (await api.put('/auth/password', data)).data

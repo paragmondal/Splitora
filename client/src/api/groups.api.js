@@ -1,52 +1,11 @@
-import api from "./axios";
-
-export const createGroup = async (data) => {
-  const response = await api.post("/groups", data);
-  return response.data;
-};
-
-export const getMyGroups = async () => {
-  const response = await api.get("/groups");
-  return response.data;
-};
-
-export const getGroupById = async (id) => {
-  const response = await api.get(`/groups/${id}`);
-  return response.data;
-};
-
-export const updateGroup = async (id, data) => {
-  const response = await api.put(`/groups/${id}`, data);
-  return response.data;
-};
-
-export const deleteGroup = async (id) => {
-  const response = await api.delete(`/groups/${id}`);
-  return response.data;
-};
-
-export const addMember = async (groupId, email) => {
-  const response = await api.post(`/groups/${groupId}/members`, { email });
-  return response.data;
-};
-
-export const removeMember = async (groupId, userId) => {
-  const response = await api.delete(`/groups/${groupId}/members/${userId}`);
-  return response.data;
-};
-
-export const leaveGroup = async (groupId) => {
-  const response = await api.post(`/groups/${groupId}/leave`);
-  return response.data;
-};
-
-export default {
-  createGroup,
-  getMyGroups,
-  getGroupById,
-  updateGroup,
-  deleteGroup,
-  addMember,
-  removeMember,
-  leaveGroup,
-};
+import api from './axios'
+export const createGroup = async (data) => (await api.post('/groups', data)).data
+export const getMyGroups = async () => (await api.get('/groups')).data
+export const getGroupById = async (id) => (await api.get(`/groups/${id}`)).data
+export const updateGroup = async (id, data) => (await api.put(`/groups/${id}`, data)).data
+export const deleteGroup = async (id) => (await api.delete(`/groups/${id}`)).data
+export const addMember = async (groupId, email) => (await api.post(`/groups/${groupId}/members`, { email })).data
+export const removeMember = async (groupId, userId) => (await api.delete(`/groups/${groupId}/members/${userId}`)).data
+export const leaveGroup = async (groupId) => (await api.post(`/groups/${groupId}/leave`)).data
+export const generateInviteCode = async (groupId) => (await api.post(`/groups/${groupId}/invite`)).data
+export const joinByInviteCode = async (code) => (await api.post(`/groups/join/${code}`)).data
