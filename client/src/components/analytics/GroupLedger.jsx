@@ -15,6 +15,7 @@ import Badge from '../ui/Badge'
 import Avatar from '../ui/Avatar'
 import Button from '../ui/Button'
 import Spinner from '../ui/Spinner'
+import toast from 'react-hot-toast'
 import { useGroupSettlements } from '../../hooks/useSettlements'
 
 const formatCurrency = (v) =>
@@ -63,35 +64,12 @@ const CATEGORY_EMOJI = {
   general: '🧾'
 }
 
-function downloadCSV(data, filename) {
-  const csv = data
-    .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
-    .join('\n')
-  const blob = new Blob([csv], { type: 'text/csv' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  a.click()
-  URL.revokeObjectURL(url)
-}
-
-function downloadText(text, filename) {
-  const blob = new Blob([text], { type: 'text/plain' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  a.click()
-  URL.revokeObjectURL(url)
-}
-
 const getMemberId = (m) => m.user?.id || m.userId || m.id
 const getMemberName = (m) => m.user?.name || m.name || 'Member'
 const getMemberEmail = (m) => m.user?.email || m.email || ''
 const getMemberAvatar = (m) => m.user?.avatar || m.avatar || null
 
-export default function GroupLedger({ expenses = [], members = [], balances = [], groupId, groupName = '' }) {
+export default function GroupLedger({ expenses = [], members = [], balances = [], groupId, groupName = 'Group' }) {
   const [sortBy, setSortBy] = useState('date')
   const [sortOrder, setSortOrder] = useState('desc')
   const [search, setSearch] = useState('')
@@ -99,7 +77,7 @@ export default function GroupLedger({ expenses = [], members = [], balances = []
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
   const [paymentFilter, setPaymentFilter] = useState('all')
-  const [isExportOpen, setIsExportOpen] = useState(false)
+  const [exportingPDF, setExportingPDF] = useState(false)
 
   const { data: settlementsData, isLoading: isSettlementsLoading } = useGroupSettlements(groupId)
 
@@ -131,9 +109,7 @@ export default function GroupLedger({ expenses = [], members = [], balances = []
     memberAccounts,
     transactionRows,
     netDebt,
-    simplifiedDebts,
-    csvRows,
-    textSummary
+    simplifiedDebts
   } = useMemo(() => {
     const totalCreditedCalc = expenses.reduce((sum, expense) => sum + Number(expense.amount || 0), 0)
     const totalDebitedCalc = expenses.reduce(
@@ -245,65 +221,6 @@ export default function GroupLedger({ expenses = [], members = [], balances = []
       })
     })
 
-    const csvRowsCalc = [
-      ['Date', 'Title', 'Category', 'Paid By', 'Amount', 'Split Type', 'Shares'],
-      ...expenses.map((expense) => {
-        const sharesText = (expense.shares || [])
-          .map((share) => {
-            const name = share.user?.name || memberMap[share.userId]?.name || 'Member'
-            return `${name}: ${formatCurrency(Number(share.amount || 0))}`
-          })
-          .join(', ')
-
-        return [
-          formatDate(expense.date || expense.createdAt),
-          expense.title || 'Expense',
-          expense.category || 'general',
-          expense.paidBy?.name || memberMap[expense.paidById]?.name || 'Member',
-          Number(expense.amount || 0).toFixed(2),
-          expense.splitType || 'equal',
-          sharesText
-        ]
-      })
-    ]
-
-    const balancesText = balances
-      .map((balance) => {
-        const name = balance.name || memberMap[balance.userId]?.name || 'Member'
-        const value = Number(balance.balance || 0)
-        const status = value > 0 ? 'owed' : value < 0 ? 'owes' : 'settled'
-        return `${name}: ${value > 0 ? '+' : ''}${formatCurrency(value)} (${status})`
-      })
-      .join('\n')
-
-    const settlementsText = simplified.length
-      ? simplified
-          .map((item) => `${memberMap[item.from]?.name || 'Member'} pays ${memberMap[item.to]?.name || 'Member'} ${formatCurrency(item.amount)}`)
-          .join('\n')
-      : 'All debts settled!'
-
-    const expensesText = expenses
-      .map((expense, idx) => {
-        const paidByName = expense.paidBy?.name || memberMap[expense.paidById]?.name || 'Member'
-        return `${idx + 1}. ${formatDateShort(expense.date || expense.createdAt)} - ${expense.title || 'Expense'} - ${formatCurrency(expense.amount)} - Paid by ${paidByName}`
-      })
-      .join('\n')
-
-    const today = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
-    const title = groupName || groupId || 'Splitora Group'
-    const textSummaryCalc = `SPLITORA GROUP LEDGER
-Group: ${title}
-Generated: ${today}
-
-EXPENSES (${expenses.length} total):
-${expensesText || 'No expenses'}
-
-BALANCES:
-${balancesText || 'No balances'}
-
-SETTLEMENTS NEEDED:
-${settlementsText}`
-
     return {
       totalCredited: totalCreditedCalc,
       totalDebited: totalDebitedCalc,
@@ -312,9 +229,7 @@ ${settlementsText}`
       memberAccounts: memberAccountsCalc,
       transactionRows: transactionRowsCalc,
       netDebt: net,
-      simplifiedDebts: simplified,
-      csvRows: csvRowsCalc,
-      textSummary: textSummaryCalc
+      simplifiedDebts: simplified
     }
   }, [expenses, members, balances, groupId, groupName, memberMap])
 
@@ -366,7 +281,269 @@ ${settlementsText}`
     setToDate('')
   }
 
-  const safeFileName = (groupName || groupId || 'group').replace(/\s+/g, '-').toLowerCase()
+  const handleExportPDF = async () => {
+    try {
+      setExportingPDF(true)
+      const { default: jsPDF } = await import('jspdf')
+      const autoTableModule = await import('jspdf-autotable')
+      const autoTable = autoTableModule.default || autoTableModule.autoTable
+
+      const doc = new jsPDF()
+      const pageWidth = doc.internal.pageSize.getWidth()
+      const generatedDate = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })
+
+      doc.setFillColor(124, 58, 237)
+      doc.rect(0, 0, pageWidth, 40, 'F')
+      doc.setTextColor(255, 255, 255)
+      doc.setFontSize(22)
+      doc.setFont('helvetica', 'bold')
+      doc.text('SPLITORA', 14, 18)
+      doc.setFontSize(11)
+      doc.setFont('helvetica', 'normal')
+      doc.text('Group Expense Ledger', 14, 28)
+      doc.setFontSize(9)
+      doc.text(`Generated: ${generatedDate}`, pageWidth - 14, 28, { align: 'right' })
+      doc.setTextColor(30, 41, 59)
+      doc.setFontSize(16)
+      doc.setFont('helvetica', 'bold')
+      doc.text(groupName || 'Group Ledger', 14, 52)
+      doc.setDrawColor(124, 58, 237)
+      doc.setLineWidth(0.5)
+      doc.line(14, 56, pageWidth - 14, 56)
+
+      doc.setFontSize(12)
+      doc.setFont('helvetica', 'bold')
+      doc.setTextColor(30, 41, 59)
+      doc.text('Summary', 14, 66)
+
+      const totalAmount = expenses.reduce((s, e) => s + Number(e.amount || 0), 0)
+      const formatINR = (v) => `Rs. ${Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+
+      const summaryData = [
+        ['Total Expenses', expenses.length.toString()],
+        ['Total Amount', formatINR(totalAmount)],
+        ['Total Members', members.length.toString()],
+        ['Avg per Expense', formatINR(expenses.length ? totalAmount / expenses.length : 0)]
+      ]
+
+      autoTable(doc, {
+        startY: 70,
+        head: [['Metric', 'Value']],
+        body: summaryData,
+        theme: 'grid',
+        headStyles: { fillColor: [124, 58, 237], textColor: 255, fontStyle: 'bold', fontSize: 10 },
+        bodyStyles: { fontSize: 10, textColor: [30, 41, 59] },
+        alternateRowStyles: { fillColor: [245, 243, 255] },
+        columnStyles: { 0: { fontStyle: 'bold', cellWidth: 60 }, 1: { cellWidth: 60 } },
+        margin: { left: 14, right: 14 }
+      })
+
+      const afterSummary = doc.lastAutoTable.finalY + 12
+      doc.setFontSize(12)
+      doc.setFont('helvetica', 'bold')
+      doc.setTextColor(30, 41, 59)
+      doc.text('All Expenses', 14, afterSummary)
+
+      const expenseRows = expenses.map((expense, index) => [
+        index + 1,
+        new Date(expense.date || expense.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
+        expense.title || '-',
+        (expense.category || 'general').charAt(0).toUpperCase() + (expense.category || 'general').slice(1),
+        expense.paidBy?.name || 'Unknown',
+        (expense.splitType || 'equal').charAt(0).toUpperCase() + (expense.splitType || 'equal').slice(1),
+        formatINR(expense.amount)
+      ])
+
+      autoTable(doc, {
+        startY: afterSummary + 4,
+        head: [['#', 'Date', 'Description', 'Category', 'Paid By', 'Split', 'Amount']],
+        body: expenseRows,
+        theme: 'striped',
+        headStyles: { fillColor: [124, 58, 237], textColor: 255, fontStyle: 'bold', fontSize: 9 },
+        bodyStyles: { fontSize: 9, textColor: [30, 41, 59] },
+        alternateRowStyles: { fillColor: [250, 249, 255] },
+        columnStyles: {
+          0: { cellWidth: 10, halign: 'center' },
+          1: { cellWidth: 28 },
+          2: { cellWidth: 45 },
+          3: { cellWidth: 25 },
+          4: { cellWidth: 28 },
+          5: { cellWidth: 22 },
+          6: { cellWidth: 28, halign: 'right', fontStyle: 'bold' }
+        },
+        margin: { left: 14, right: 14 }
+      })
+
+      doc.addPage()
+      doc.setFillColor(124, 58, 237)
+      doc.rect(0, 0, pageWidth, 20, 'F')
+      doc.setTextColor(255, 255, 255)
+      doc.setFontSize(11)
+      doc.setFont('helvetica', 'bold')
+      doc.text('SPLITORA — Group Ledger (continued)', 14, 13)
+      doc.setFontSize(12)
+      doc.setFont('helvetica', 'bold')
+      doc.setTextColor(30, 41, 59)
+      doc.text('Member Balances', 14, 32)
+
+      const balanceRows = memberAccounts.map((entry) => {
+        const balance = Number(entry.balance || 0)
+        const status = balance > 0 ? 'Will Receive' : balance < 0 ? 'Needs to Pay' : 'Settled'
+        const totalPaid = entry.credits?.reduce((sum, c) => sum + Number(c.amount || 0), 0) || 0
+        const totalOwed = entry.debits?.reduce((sum, d) => sum + Number(d.amount || 0), 0) || 0
+        return [entry.name || 'Unknown', entry.email || '-', formatINR(totalPaid), formatINR(totalOwed), formatINR(Math.abs(balance)), status]
+      })
+
+      autoTable(doc, {
+        startY: 36,
+        head: [['Member', 'Email', 'Total Paid', 'Total Owed', 'Net Balance', 'Status']],
+        body: balanceRows,
+        theme: 'grid',
+        headStyles: { fillColor: [124, 58, 237], textColor: 255, fontStyle: 'bold', fontSize: 9 },
+        bodyStyles: { fontSize: 9, textColor: [30, 41, 59] },
+        alternateRowStyles: { fillColor: [245, 243, 255] },
+        columnStyles: {
+          0: { fontStyle: 'bold', cellWidth: 35 },
+          1: { cellWidth: 45 },
+          2: { cellWidth: 28, halign: 'right' },
+          3: { cellWidth: 28, halign: 'right' },
+          4: { cellWidth: 28, halign: 'right', fontStyle: 'bold' },
+          5: { cellWidth: 22, halign: 'center' }
+        },
+        didParseCell: (data) => {
+          if (data.column.index === 5 && data.section === 'body') {
+            const val = data.cell.raw
+            if (val === 'Will Receive') data.cell.styles.textColor = [22, 163, 74]
+            else if (val === 'Needs to Pay') data.cell.styles.textColor = [220, 38, 38]
+            else data.cell.styles.textColor = [100, 116, 139]
+          }
+        },
+        margin: { left: 14, right: 14 }
+      })
+
+      const afterBalances = doc.lastAutoTable.finalY + 12
+      doc.setFontSize(12)
+      doc.setFont('helvetica', 'bold')
+      doc.setTextColor(30, 41, 59)
+      doc.text('Settlement Suggestions', 14, afterBalances)
+
+      const creditors = balances.filter((b) => Number(b.balance) > 0.01).sort((a, b) => b.balance - a.balance)
+      const debtors = balances.filter((b) => Number(b.balance) < -0.01).sort((a, b) => a.balance - b.balance)
+      const settlementRows = []
+      const creds = creditors.map((c) => ({ ...c, remaining: Number(c.balance) }))
+      const debts = debtors.map((d) => ({ ...d, remaining: Math.abs(Number(d.balance)) }))
+
+      let ci = 0
+      let di = 0
+      while (ci < creds.length && di < debts.length) {
+        const amount = Math.min(creds[ci].remaining, debts[di].remaining)
+        if (amount > 0.01) settlementRows.push([debts[di].name, 'pays', creds[ci].name, formatINR(amount)])
+        creds[ci].remaining -= amount
+        debts[di].remaining -= amount
+        if (creds[ci].remaining < 0.01) ci += 1
+        if (debts[di].remaining < 0.01) di += 1
+      }
+
+      if (settlementRows.length > 0) {
+        autoTable(doc, {
+          startY: afterBalances + 4,
+          head: [['From (Payer)', '', 'To (Receiver)', 'Amount']],
+          body: settlementRows,
+          theme: 'plain',
+          headStyles: { fillColor: [124, 58, 237], textColor: 255, fontStyle: 'bold', fontSize: 9 },
+          bodyStyles: { fontSize: 10, textColor: [30, 41, 59] },
+          columnStyles: {
+            0: { fontStyle: 'bold', textColor: [220, 38, 38], cellWidth: 50 },
+            1: { cellWidth: 20, halign: 'center', textColor: [100, 116, 139] },
+            2: { fontStyle: 'bold', textColor: [22, 163, 74], cellWidth: 50 },
+            3: { fontStyle: 'bold', halign: 'right', textColor: [124, 58, 237], cellWidth: 40 }
+          },
+          margin: { left: 14, right: 14 }
+        })
+      } else {
+        doc.setFontSize(10)
+        doc.setFont('helvetica', 'normal')
+        doc.setTextColor(100, 116, 139)
+        doc.text('All settled up! No pending settlements.', 14, afterBalances + 10)
+      }
+
+      doc.addPage()
+      doc.setFillColor(124, 58, 237)
+      doc.rect(0, 0, pageWidth, 20, 'F')
+      doc.setTextColor(255, 255, 255)
+      doc.setFontSize(11)
+      doc.setFont('helvetica', 'bold')
+      doc.text('SPLITORA — Expense Shares Detail', 14, 13)
+      doc.setFontSize(12)
+      doc.setFont('helvetica', 'bold')
+      doc.setTextColor(30, 41, 59)
+      doc.text('Expense Shares Breakdown', 14, 32)
+
+      const sharesRows = []
+      expenses.forEach((expense) => {
+        if (expense.shares && expense.shares.length > 0) {
+          expense.shares.forEach((share, idx) => {
+            sharesRows.push([
+              idx === 0 ? expense.title : '',
+              idx === 0 ? new Date(expense.date || expense.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '',
+              idx === 0 ? formatINR(expense.amount) : '',
+              share.user?.name || 'Unknown',
+              formatINR(share.amount),
+              share.percentage ? `${share.percentage}%` : '-',
+              share.isPaid ? 'Paid' : 'Pending'
+            ])
+          })
+        }
+      })
+
+      if (sharesRows.length > 0) {
+        autoTable(doc, {
+          startY: 36,
+          head: [['Expense', 'Date', 'Total', 'Member', 'Share Amount', 'Percentage', 'Status']],
+          body: sharesRows,
+          theme: 'striped',
+          headStyles: { fillColor: [124, 58, 237], textColor: 255, fontStyle: 'bold', fontSize: 9 },
+          bodyStyles: { fontSize: 9, textColor: [30, 41, 59] },
+          alternateRowStyles: { fillColor: [250, 249, 255] },
+          columnStyles: {
+            0: { cellWidth: 38, fontStyle: 'bold' },
+            1: { cellWidth: 24 },
+            2: { cellWidth: 26, halign: 'right' },
+            3: { cellWidth: 30 },
+            4: { cellWidth: 26, halign: 'right', fontStyle: 'bold' },
+            5: { cellWidth: 22, halign: 'center' },
+            6: { cellWidth: 20, halign: 'center' }
+          },
+          didParseCell: (data) => {
+            if (data.column.index === 6 && data.section === 'body') {
+              if (data.cell.raw === 'Paid') data.cell.styles.textColor = [22, 163, 74]
+              else if (data.cell.raw === 'Pending') data.cell.styles.textColor = [217, 119, 6]
+            }
+          },
+          margin: { left: 14, right: 14 }
+        })
+      }
+
+      const totalPages = doc.internal.getNumberOfPages()
+      for (let i = 1; i <= totalPages; i += 1) {
+        doc.setPage(i)
+        doc.setFontSize(8)
+        doc.setTextColor(148, 163, 184)
+        doc.setFont('helvetica', 'normal')
+        doc.text(`Splitora — Group Expense Tracker | Page ${i} of ${totalPages}`, pageWidth / 2, doc.internal.pageSize.getHeight() - 8, { align: 'center' })
+        doc.text(`Confidential — Generated on ${generatedDate}`, pageWidth / 2, doc.internal.pageSize.getHeight() - 4, { align: 'center' })
+      }
+
+      const safeName = (groupName || 'group').replace(/[^a-z0-9]/gi, '-').toLowerCase()
+      doc.save(`splitora-${safeName}-ledger-${new Date().toISOString().slice(0, 10)}.pdf`)
+      toast.success('Ledger exported as PDF!')
+    } catch (err) {
+      console.error('PDF export error:', err)
+      toast.error('Failed to export PDF')
+    } finally {
+      setExportingPDF(false)
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -376,33 +553,9 @@ ${settlementsText}`
             <ScrollText size={18} className="text-primary-600" />
             <h2 className="text-lg font-semibold text-surface-900">Group Ledger</h2>
           </div>
-          <div className="relative">
-            <Button variant="outline" leftIcon={<Download size={16} />} onClick={() => setIsExportOpen((prev) => !prev)}>
-              Export
-            </Button>
-            {isExportOpen ? (
-              <div className="absolute right-0 z-20 mt-2 w-48 overflow-hidden rounded-xl border border-surface-200 bg-white shadow-modal">
-                <button
-                  className="w-full px-3 py-2 text-left text-sm text-surface-700 hover:bg-surface-100"
-                  onClick={() => {
-                    downloadCSV(csvRows, `splitora-ledger-${safeFileName}.csv`)
-                    setIsExportOpen(false)
-                  }}
-                >
-                  Export as CSV
-                </button>
-                <button
-                  className="w-full px-3 py-2 text-left text-sm text-surface-700 hover:bg-surface-100"
-                  onClick={() => {
-                    downloadText(textSummary, `splitora-ledger-${safeFileName}.txt`)
-                    setIsExportOpen(false)
-                  }}
-                >
-                  Export as Text Summary
-                </button>
-              </div>
-            ) : null}
-          </div>
+          <Button variant="outline" leftIcon={<Download size={16} />} onClick={handleExportPDF} loading={exportingPDF}>
+            Export PDF
+          </Button>
         </div>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">

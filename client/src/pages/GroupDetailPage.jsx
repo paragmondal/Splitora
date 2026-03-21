@@ -195,7 +195,7 @@ export default function GroupDetailPage() {
       )}
 
       {activeTab === 'ledger' && (
-        <GroupLedger expenses={expenses} members={members} balances={balances} groupId={id} groupName={group.name} />
+        <GroupLedger expenses={expenses} members={members} balances={balances} groupId={id} groupName={group?.name || 'Group'} />
       )}
 
       {activeTab === 'expenses' && (
