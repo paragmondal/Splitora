@@ -17,6 +17,7 @@ const router = express.Router()
 
 router.use(protect)
 
+router.post('/join/:code', joinByInviteCode)
 router.post('/', createGroup)
 router.get('/', getMyGroups)
 router.get('/:id', getGroupById)
@@ -26,6 +27,5 @@ router.post('/:id/members', addMember)
 router.delete('/:id/members/:userId', removeMember)
 router.post('/:id/leave', leaveGroup)
 router.post('/:id/invite', generateInviteCode)
-router.post('/join/:code', joinByInviteCode)
 
 module.exports = router

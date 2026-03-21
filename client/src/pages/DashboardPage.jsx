@@ -1,14 +1,19 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowUpRight, HandCoins, Plus, ReceiptText } from 'lucide-react'
+import { Html5Qrcode } from 'html5-qrcode'
+import { ArrowUpRight, HandCoins, Plus, UserPlus } from 'lucide-react'
+import toast from 'react-hot-toast'
 import useAuth from '../hooks/useAuth'
 import { useDashboardStats } from '../hooks/useStats'
+import { joinByInviteCode } from '../api/groups.api'
 import GroupCard from '../components/groups/GroupCard'
 import SpendingInsights from '../components/ai/SpendingInsights'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
 import Avatar from '../components/ui/Avatar'
 import Button from '../components/ui/Button'
+import Modal from '../components/ui/Modal'
+import Input from '../components/ui/Input'
 
 const formatCurrency = (value) =>
   new Intl.NumberFormat('en-IN', {
@@ -21,10 +26,125 @@ const SkeletonBlock = ({ className }) => (
   <div className={`animate-pulse rounded-xl bg-surface-200 ${className}`} />
 )
 
+const extractInviteCode = (text) => {
+  const value = String(text || '').trim()
+  if (!value) return ''
+  if (value.includes('/join/')) {
+    const idx = value.lastIndexOf('/join/')
+    return value.slice(idx + 6).split(/[?#]/)[0]
+  }
+  return value
+}
+
+function JoinGroupModal({ isOpen, onClose, onJoin }) {
+  const [tab, setTab] = useState('code')
+  const [code, setCode] = useState('')
+  const [isJoining, setIsJoining] = useState(false)
+  const [scanStatus, setScanStatus] = useState('')
+  const [permissionError, setPermissionError] = useState('')
+  const scannerRef = useRef(null)
+  const regionIdRef = useRef(`join-qr-reader-${Math.random().toString(36).slice(2)}`)
+
+  useEffect(() => {
+    if (!isOpen || tab !== 'scan') return undefined
+
+    let isMounted = true
+    setPermissionError('')
+    setScanStatus('Camera scanning...')
+    const scanner = new Html5Qrcode(regionIdRef.current)
+    scannerRef.current = scanner
+
+    scanner.start(
+      { facingMode: 'environment' },
+      { fps: 10, qrbox: { width: 240, height: 240 } },
+      async (decodedText) => {
+        if (!isMounted) return
+        const inviteCode = extractInviteCode(decodedText)
+        if (!inviteCode) return
+
+        try {
+          setIsJoining(true)
+          await onJoin(inviteCode)
+          await scanner.stop()
+          await scanner.clear()
+        } catch {
+          // handled by parent
+        } finally {
+          setIsJoining(false)
+        }
+      },
+      () => {}
+    ).catch((err) => {
+      if (!isMounted) return
+      setPermissionError(err?.message || 'Camera access denied. Please allow camera permission and try again.')
+      setScanStatus('')
+    })
+
+    return () => {
+      isMounted = false
+      const activeScanner = scannerRef.current
+      scannerRef.current = null
+      if (activeScanner) {
+        activeScanner.stop().catch(() => {}).finally(() => {
+          activeScanner.clear().catch(() => {})
+        })
+      }
+    }
+  }, [isOpen, tab, onJoin])
+
+  const handleJoinCode = async (event) => {
+    event.preventDefault()
+    const inviteCode = extractInviteCode(code)
+    if (!inviteCode) {
+      toast.error('Please enter a valid invite code')
+      return
+    }
+    setIsJoining(true)
+    try {
+      await onJoin(inviteCode)
+    } finally {
+      setIsJoining(false)
+    }
+  }
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="Join a Group" size="sm">
+      <div className="space-y-4">
+        <div className="flex gap-2">
+          <Button size="sm" variant={tab === 'code' ? 'primary' : 'outline'} onClick={() => setTab('code')}>Enter Code</Button>
+          <Button size="sm" variant={tab === 'scan' ? 'primary' : 'outline'} onClick={() => setTab('scan')}>Scan QR</Button>
+        </div>
+
+        {tab === 'code' ? (
+          <form onSubmit={handleJoinCode} className="space-y-3">
+            <Input
+              label="Invite code"
+              placeholder="Enter group code"
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+            />
+            <div className="flex justify-end">
+              <Button type="submit" loading={isJoining}>Join</Button>
+            </div>
+          </form>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-sm text-surface-600">{scanStatus || 'Use your camera to scan a Splitora invite QR code.'}</p>
+            <div id={regionIdRef.current} className="min-h-64 rounded-xl border border-surface-200 bg-surface-100 p-2" />
+            {permissionError ? <p className="text-sm text-danger-600">{permissionError}</p> : null}
+            {isJoining ? <p className="text-sm text-primary-600">Joining group...</p> : null}
+          </div>
+        )}
+      </div>
+    </Modal>
+  )
+}
+
 export default function DashboardPage() {
   const navigate = useNavigate()
   const { user } = useAuth()
   const { data, isLoading } = useDashboardStats()
+  const [isJoinModalOpen, setIsJoinModalOpen] = useState(false)
 
   const payload = data?.data || data || {}
   const totalGroups = payload?.totalGroups || 0
@@ -41,6 +161,24 @@ export default function DashboardPage() {
     return 'Good evening'
   }, [])
 
+  const handleJoinByCode = async (rawCode) => {
+    const code = extractInviteCode(rawCode)
+    if (!code) {
+      toast.error('Invalid invite code')
+      return
+    }
+
+    try {
+      await joinByInviteCode(code)
+      toast.success('Joined group!')
+      setIsJoinModalOpen(false)
+      navigate('/groups')
+    } catch (error) {
+      toast.error(error?.response?.data?.message || 'Failed to join group')
+      throw error
+    }
+  }
+
   return (
     <div className="space-y-6">
       <section className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -56,8 +194,8 @@ export default function DashboardPage() {
           <Button leftIcon={<Plus size={16} />} onClick={() => navigate('/groups')}>
             Create Group
           </Button>
-          <Button variant="outline" leftIcon={<ReceiptText size={16} />} onClick={() => navigate('/groups')}>
-            Add Expense
+          <Button variant="outline" leftIcon={<UserPlus size={16} />} onClick={() => setIsJoinModalOpen(true)}>
+            Join Group
           </Button>
         </div>
       </section>
@@ -154,6 +292,12 @@ export default function DashboardPage() {
           </div>
         </Card>
       </section>
+
+      <JoinGroupModal
+        isOpen={isJoinModalOpen}
+        onClose={() => setIsJoinModalOpen(false)}
+        onJoin={handleJoinByCode}
+      />
     </div>
   )
 }

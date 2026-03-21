@@ -1,10 +1,11 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { Plus, Link as LinkIcon, Copy } from 'lucide-react'
+import { Plus, Share2, Copy } from 'lucide-react'
 import { useGroup, useAddMember, useGenerateInviteCode } from '../hooks/useGroups'
 import { useDeleteExpense } from '../hooks/useExpenses'
 import useSocket from '../hooks/useSocket'
+import { downloadQR, generateQRDataUrl } from '../utils/generateQR'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
 import Avatar from '../components/ui/Avatar'
@@ -24,6 +25,8 @@ const formatCurrency = (value) =>
     maximumFractionDigits: 2
   }).format(value || 0)
 
+const buildInviteUrl = (code) => `https://splitora-tawny.vercel.app/join/${code}`
+
 export default function GroupDetailPage() {
   const { id } = useParams()
   useSocket(id)
@@ -31,8 +34,9 @@ export default function GroupDetailPage() {
   const [activeTab, setActiveTab] = useState('expenses')
   const [isAddMemberOpen, setIsAddMemberOpen] = useState(false)
   const [isAddExpenseOpen, setIsAddExpenseOpen] = useState(false)
-  const [isInviteOpen, setIsInviteOpen] = useState(false)
-  const [inviteLink, setInviteLink] = useState('')
+  const [isShareOpen, setIsShareOpen] = useState(false)
+  const [inviteCode, setInviteCode] = useState('')
+  const [qrDataUrl, setQrDataUrl] = useState('')
 
   const { data, isLoading, refetch } = useGroup(id)
   const addMemberMutation = useAddMember(id)
@@ -45,6 +49,28 @@ export default function GroupDetailPage() {
   const balances = useMemo(() => group?.balances || [], [group])
 
   const totalGroupSpending = expenses.reduce((sum, exp) => sum + Number(exp.amount || 0), 0)
+  const effectiveInviteCode = inviteCode || group?.inviteCode || ''
+  const inviteUrl = effectiveInviteCode ? buildInviteUrl(effectiveInviteCode) : ''
+
+  useEffect(() => {
+    setInviteCode(group?.inviteCode || '')
+  }, [group?.inviteCode])
+
+  useEffect(() => {
+    let cancelled = false
+    if (!inviteUrl) {
+      setQrDataUrl('')
+      return
+    }
+
+    generateQRDataUrl(inviteUrl).then((dataUrl) => {
+      if (!cancelled) setQrDataUrl(dataUrl || '')
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [inviteUrl])
 
   if (isLoading) {
     return (
@@ -67,13 +93,20 @@ export default function GroupDetailPage() {
     } catch {}
   }
 
-  const handleGenerateInvite = async () => {
+  const handleGenerateCode = async () => {
     try {
       const response = await inviteMutation.mutateAsync(id)
-      const link = response?.data?.inviteUrl || response?.inviteUrl || ''
-      setInviteLink(link)
-      setIsInviteOpen(true)
-    } catch {}
+      const code = response?.data?.inviteCode || response?.inviteCode || ''
+      if (!code) {
+        toast.error('Failed to generate code')
+        return
+      }
+      setInviteCode(code)
+      toast.success('Invite code generated')
+      refetch()
+    } catch (error) {
+      toast.error(error?.response?.data?.message || 'Failed to generate code')
+    }
   }
 
   return (
@@ -93,7 +126,7 @@ export default function GroupDetailPage() {
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" leftIcon={<LinkIcon size={16} />} onClick={handleGenerateInvite}>Invite</Button>
+            <Button variant="outline" leftIcon={<Share2 size={16} />} onClick={() => setIsShareOpen(true)}>Share Group</Button>
             <Button variant="outline" leftIcon={<Plus size={16} />} onClick={() => setIsAddMemberOpen(true)}>Add Member</Button>
             <Button leftIcon={<Plus size={16} />} onClick={() => setIsAddExpenseOpen(true)}>Add Expense</Button>
           </div>
@@ -110,6 +143,12 @@ export default function GroupDetailPage() {
 
       {activeTab === 'expenses' && (
         <div className="space-y-3">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-surface-900">Expenses</h2>
+            <Button leftIcon={<Plus size={16} />} onClick={() => setIsAddExpenseOpen(true)}>
+              Add Expense
+            </Button>
+          </div>
           {expenses.length ? (
             expenses.map((expense) => (
               <ExpenseCard key={expense.id} expense={expense} onDelete={handleDeleteExpense} />
@@ -149,6 +188,15 @@ export default function GroupDetailPage() {
         </Card>
       )}
 
+      {activeTab === 'expenses' && (
+        <button
+          onClick={() => setIsAddExpenseOpen(true)}
+          className="fixed bottom-6 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-primary-600 text-white shadow-lg transition hover:bg-primary-700 hover:scale-105"
+        >
+          <Plus size={24} />
+        </button>
+      )}
+
       <AddMemberModal
         isOpen={isAddMemberOpen}
         onClose={() => setIsAddMemberOpen(false)}
@@ -167,27 +215,75 @@ export default function GroupDetailPage() {
         }}
       />
 
-      <Modal isOpen={isInviteOpen} onClose={() => setIsInviteOpen(false)} title="Invite Link" size="sm">
-        <div className="space-y-3">
-          <p className="text-sm text-surface-600">Share this link to join the group.</p>
-          <div className="rounded-lg border border-surface-300 bg-surface-100 p-2 text-xs break-all">{inviteLink}</div>
-          <div className="flex justify-end">
-            <Button
-              size="sm"
-              variant="outline"
-              leftIcon={<Copy size={14} />}
-              onClick={async () => {
-                try {
-                  await navigator.clipboard.writeText(inviteLink)
-                  toast.success('Invite link copied')
-                } catch {
-                  toast.error('Failed to copy')
-                }
-              }}
-            >
-              Copy
-            </Button>
-          </div>
+      <Modal isOpen={isShareOpen} onClose={() => setIsShareOpen(false)} title="Share Group" size="md">
+        <div className="space-y-6">
+          <section className="space-y-3">
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-surface-500">Group Code</h3>
+            {effectiveInviteCode ? (
+              <div className="rounded-xl border border-primary-200 bg-primary-50 px-4 py-3 text-center text-2xl font-bold tracking-widest text-primary-700">
+                {effectiveInviteCode}
+              </div>
+            ) : (
+              <Button onClick={handleGenerateCode} loading={inviteMutation.isPending}>Generate Code</Button>
+            )}
+            {effectiveInviteCode ? (
+              <Button
+                variant="outline"
+                leftIcon={<Copy size={14} />}
+                onClick={async () => {
+                  await navigator.clipboard.writeText(effectiveInviteCode)
+                  toast.success('Code copied')
+                }}
+              >
+                Copy Code
+              </Button>
+            ) : null}
+          </section>
+
+          {effectiveInviteCode ? (
+            <>
+              <section className="space-y-3">
+                <h3 className="text-sm font-semibold uppercase tracking-wide text-surface-500">Invite Link</h3>
+                <div className="rounded-lg border border-surface-300 bg-surface-100 p-3 text-xs break-all">{inviteUrl}</div>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="outline"
+                    leftIcon={<Copy size={14} />}
+                    onClick={async () => {
+                      await navigator.clipboard.writeText(inviteUrl)
+                      toast.success('Link copied')
+                    }}
+                  >
+                    Copy Link
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      const text = encodeURIComponent(`Join my Splitora group! Use code: ${effectiveInviteCode} or click: ${inviteUrl}`)
+                      window.open(`https://wa.me/?text=${text}`, '_blank')
+                    }}
+                  >
+                    Share on WhatsApp
+                  </Button>
+                </div>
+              </section>
+
+              <section className="space-y-3">
+                <h3 className="text-sm font-semibold uppercase tracking-wide text-surface-500">QR Code</h3>
+                {qrDataUrl ? (
+                  <img src={qrDataUrl} alt="Group invite QR" className="mx-auto h-52 w-52 rounded-xl border border-surface-200 bg-white p-2" />
+                ) : (
+                  <p className="text-sm text-surface-500">Generating QR...</p>
+                )}
+                <Button
+                  variant="outline"
+                  onClick={() => downloadQR(inviteUrl, `splitora-${group.name?.replace(/\s+/g, '-').toLowerCase() || 'group'}-qr.png`)}
+                >
+                  Download QR
+                </Button>
+              </section>
+            </>
+          ) : null}
         </div>
       </Modal>
     </div>

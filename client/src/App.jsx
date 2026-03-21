@@ -127,11 +127,7 @@ function AppRoutes() {
         />
         <Route
           path="/join/:code"
-          element={
-            <ProtectedRoute>
-              <JoinGroupPage />
-            </ProtectedRoute>
-          }
+          element={<JoinGroupPage />}
         />
 
         <Route path="*" element={<Navigate to="/" replace />} />
