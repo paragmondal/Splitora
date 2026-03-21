@@ -15,8 +15,9 @@ import ExpenseCard from '../components/expenses/ExpenseCard'
 import AddExpenseModal from '../components/expenses/AddExpenseModal'
 import SettlementSuggestions from '../components/settlements/SettlementSuggestions'
 import AddMemberModal from '../components/groups/AddMemberModal'
+import GroupAnalytics from '../components/analytics/GroupAnalytics'
 
-const TABS = ['expenses', 'balances', 'settlements']
+const TABS = ['expenses', 'balances', 'settlements', 'analytics']
 
 const formatCurrency = (value) =>
   new Intl.NumberFormat('en-IN', {
@@ -186,6 +187,10 @@ export default function GroupDetailPage() {
           <h2 className="mb-4 text-lg font-semibold text-surface-900">Settlement suggestions</h2>
           <SettlementSuggestions groupId={id} />
         </Card>
+      )}
+
+      {activeTab === 'analytics' && (
+        <GroupAnalytics expenses={expenses} members={members} balances={balances} />
       )}
 
       {activeTab === 'expenses' && (
