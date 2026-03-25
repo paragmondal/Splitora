@@ -1,4 +1,4 @@
-import { NavLink, useNavigate } from "react-router-dom";
+import { NavLink } from "react-router-dom";
 import {
   ArrowLeftRight,
   CircleDollarSign,
@@ -20,18 +20,13 @@ const navItems = [
 
 export default function Sidebar({ user, mobile = false, onClose }) {
   const { logout } = useAuth();
-  const navigate = useNavigate();
 
   const wrapperClass = mobile
     ? "fixed inset-y-0 left-0 z-50 w-64"
     : "hidden md:fixed md:inset-y-0 md:left-0 md:z-40 md:block md:w-64";
 
   const handleLogout = async () => {
-    try {
-      await logout();
-    } catch {
-      window.location.href = "/login";
-    }
+    await logout();
   };
 
   return (

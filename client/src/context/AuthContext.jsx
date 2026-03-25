@@ -84,7 +84,14 @@ export function AuthProvider({ children }) {
     [setAuth]
   );
 
-  const logout = useCallback(async () => {
+  const logout = useCallback(async (options = {}) => {
+    const { confirm = true } = options;
+
+    if (confirm) {
+      const shouldLogout = window.confirm("Are you sure you want to log out?");
+      if (!shouldLogout) return false;
+    }
+
     try {
       if (refreshToken) {
         await logoutUser(refreshToken);
@@ -96,6 +103,7 @@ export function AuthProvider({ children }) {
       toast.success("Logged out");
       window.location.href = "/login";
     }
+    return true;
   }, [clearAuth, refreshToken]);
 
   const value = useMemo(
