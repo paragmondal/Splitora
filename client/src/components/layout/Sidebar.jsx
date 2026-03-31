@@ -1,4 +1,4 @@
-import { NavLink, useNavigate } from "react-router-dom";
+import { NavLink } from "react-router-dom";
 import {
   ArrowLeftRight,
   CircleDollarSign,
@@ -20,7 +20,6 @@ const navItems = [
 
 export default function Sidebar({ user, mobile = false, onClose }) {
   const { logout } = useAuth();
-  const navigate = useNavigate();
 
   const wrapperClass = mobile
     ? "fixed inset-y-0 left-0 z-50 w-64"
@@ -56,11 +55,11 @@ export default function Sidebar({ user, mobile = false, onClose }) {
         </div>
 
         <nav className="flex-1 space-y-1.5">
-          {navItems.map(({ to, label, Icon }) => (
+          {navItems.map((item) => (
             <NavLink
-              key={to}
-              to={to}
-              end={to === "/"}
+              key={item.to}
+              to={item.to}
+              end={item.to === "/"}
               onClick={mobile ? onClose : undefined}
               className={({ isActive }) =>
                 [
@@ -71,8 +70,8 @@ export default function Sidebar({ user, mobile = false, onClose }) {
                 ].join(" ")
               }
             >
-              <Icon size={18} />
-              <span>{label}</span>
+              <item.Icon size={18} />
+              <span>{item.label}</span>
             </NavLink>
           ))}
         </nav>

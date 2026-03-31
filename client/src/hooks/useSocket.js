@@ -2,7 +2,8 @@ import { useEffect } from 'react'
 import { io } from 'socket.io-client'
 import { useQueryClient } from '@tanstack/react-query'
 
-const SOCKET_URL = 'https://splitora-api.onrender.com'
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:10000/api'
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || API_URL.replace(/\/api\/?$/, '')
 
 export default function useSocket(groupId) {
   const queryClient = useQueryClient()
