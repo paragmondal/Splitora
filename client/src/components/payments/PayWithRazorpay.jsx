@@ -25,7 +25,7 @@ export default function PayWithRazorpay({ settlement, onSuccess }) {
       const order = orderRes?.data
 
       if (!order?.orderId) { toast.error('Failed to create payment order'); return }
-      if (!order?.keyId) { toast.error('Payment gateway not configured'); return }
+      if (!order?.keyId) { toast.error('Payment service is temporarily unavailable. Please try again later.'); return }
 
       const options = {
         key: order.keyId,
