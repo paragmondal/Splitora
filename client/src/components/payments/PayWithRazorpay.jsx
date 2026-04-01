@@ -25,9 +25,10 @@ export default function PayWithRazorpay({ settlement, onSuccess }) {
       const order = orderRes?.data
 
       if (!order?.orderId) { toast.error('Failed to create payment order'); return }
+      if (!order?.keyId) { toast.error('Payment gateway not configured'); return }
 
       const options = {
-        key: import.meta.env.VITE_RAZORPAY_KEY_ID,
+        key: order.keyId,
         amount: order.amount,
         currency: 'INR',
         name: 'Splitora',

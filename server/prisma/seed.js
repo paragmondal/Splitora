@@ -30,7 +30,8 @@ const IDS = {
 };
 
 async function seedUsers() {
-  const passwordHash = await bcrypt.hash("password123", 12);
+  const seedPassword = process.env.SEED_USER_PASSWORD || "password123";
+  const passwordHash = await bcrypt.hash(seedPassword, 12);
 
   const alice = await prisma.user.upsert({
     where: { email: "alice@test.com" },
