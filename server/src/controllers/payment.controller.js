@@ -8,6 +8,18 @@ const getRazorpay = () => new Razorpay({
   key_secret: process.env.RAZORPAY_KEY_SECRET
 })
 
+const ensureRazorpayConfigured = (res, requireKeyId = false) => {
+  const hasSecret = Boolean(process.env.RAZORPAY_KEY_SECRET)
+  const hasKeyId = Boolean(process.env.RAZORPAY_KEY_ID)
+
+  if (!hasSecret || (requireKeyId && !hasKeyId)) {
+    ApiResponse.error(res, 'Payment service is temporarily unavailable. Please try again later.', 503)
+    return false
+  }
+
+  return true
+}
+
 const createOrder = async (req, res, next) => {
   try {
     const { settlementId, amount } = req.body
@@ -16,6 +28,7 @@ const createOrder = async (req, res, next) => {
     const settlement = await prisma.settlement.findUnique({ where: { id: settlementId } })
     if (!settlement) return ApiResponse.error(res, 'Settlement not found', 404)
     if (settlement.payerId !== userId) return ApiResponse.error(res, 'Only payer can initiate payment', 403)
+    if (!ensureRazorpayConfigured(res, true)) return
     const razorpay = getRazorpay()
     const order = await razorpay.orders.create({
       amount: Math.round(Number(amount) * 100),
@@ -32,6 +45,7 @@ const verifyPayment = async (req, res, next) => {
   try {
     const { razorpay_order_id, razorpay_payment_id, razorpay_signature, settlementId } = req.body
     if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) return ApiResponse.error(res, 'Missing payment details', 400)
+    if (!ensureRazorpayConfigured(res)) return
     const expectedSig = crypto.createHmac('sha256', process.env.RAZORPAY_KEY_SECRET).update(`${razorpay_order_id}|${razorpay_payment_id}`).digest('hex')
     if (expectedSig !== razorpay_signature) return ApiResponse.error(res, 'Invalid payment signature', 400)
     await prisma.settlement.update({
