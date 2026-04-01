@@ -86,4 +86,3 @@ npm run dev
 
 - `VITE_API_URL` (optional): backend origin (without `/api`), defaults to hosted API
 - `VITE_GOOGLE_CLIENT_ID` (optional): Google OAuth client id for client-side integration
-- `VITE_RAZORPAY_KEY_ID` (optional): legacy fallback; server now returns key id with order creation
