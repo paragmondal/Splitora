@@ -90,7 +90,7 @@ export default function GoogleSignInButton({ onCredential }) {
             Continue with Google
           </button>
           <p className="text-center text-xs text-surface-500">
-            Set <code>VITE_GOOGLE_CLIENT_ID</code> in <code>client/.env</code> and restart frontend.
+            Set <code>VITE_GOOGLE_CLIENT_ID</code> in <code>client/.env</code> and restart the dev server with <code>npm run dev</code>.
           </p>
         </div>
       )}

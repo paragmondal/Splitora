@@ -179,7 +179,7 @@ const googleSignIn = async (req, res, next) => {
         }
       })
     } else if (user.googleId && user.googleId !== googleId) {
-      return ApiResponse.error(res, 'Google account mismatch for this email', 409)
+      return ApiResponse.error(res, 'Unable to sign in. Please try again or contact support.', 409)
     } else if (!user.googleId) {
       user = await prisma.user.update({
         where: { id: user.id },
